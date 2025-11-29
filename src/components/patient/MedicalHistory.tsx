@@ -24,15 +24,20 @@ export function MedicalHistory() {
           patientService.getClinicalProfile()
         ]);
         
+        // Validación de seguridad: Asegurar que sea array
+        const safeHistory = Array.isArray(historyData) ? historyData : [];
+
         // Ordenar por fecha descendente
-        const sortedHistory = historyData.sort((a, b) => 
+        const sortedHistory = safeHistory.sort((a, b) => 
           new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
         );
 
         setHistory(sortedHistory);
         setProfile(profileData);
       } catch (error) {
-        toast.error("Error al cargar el historial médico");
+        console.error(error);
+        toast.error("Error al cargar datos");
+        setHistory([]); // Evitar crash si falla
       } finally {
         setIsLoading(false);
       }
@@ -42,33 +47,61 @@ export function MedicalHistory() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    // Fix para fechas ISO
+    const date = new Date(dateString.replace(/-/g, '/'));
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString('es-ES', {
       day: 'numeric', month: 'long', year: 'numeric'
     });
   };
 
-  // Helper para nombre médico seguro
+  // --- HELPERS SEGUROS (ESTO EVITA LA PANTALLA BLANCA) ---
+  
   const getDoctorName = (record: MedicalRecord) => {
-    // Ajusta esto según cómo venga tu JSON real (anidado o plano)
-    if (record.medico?.nombre_completo) return record.medico.nombre_completo;
-    return "Médico Tratante";
+    // Verifica todas las posibles estructuras que pueda devolver tu backend
+    if (!record.medico) return "Médico no especificado";
+    
+    // Si es objeto con nombre_completo (Estructura nueva)
+    if (typeof record.medico === 'object' && 'nombre_completo' in record.medico) {
+        return (record.medico as any).nombre_completo;
+    }
+    // Si es objeto con nombre (Estructura antigua)
+    if (typeof record.medico === 'object' && 'nombre' in record.medico) {
+        return (record.medico as any).nombre;
+    }
+    // Si viene como string directo
+    if (typeof record.medico === 'string') {
+        return record.medico;
+    }
+    
+    return "Dr. Asignado";
   };
   
   const getSpecialty = (record: MedicalRecord) => {
-     if (record.medico?.especialidad?.nombre) return record.medico.especialidad.nombre;
+     if (!record.medico) return "General";
+     
+     // Si especialidad es un objeto (Estructura nueva)
+     if (typeof (record.medico as any).especialidad === 'object') {
+         return (record.medico as any).especialidad?.nombre || "General";
+     }
+     // Si especialidad es un string
+     if (typeof (record.medico as any).especialidad === 'string') {
+         return (record.medico as any).especialidad;
+     }
      return "General";
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-10 flex justify-center items-center text-gray-400">
-        <Loader2 className="h-8 w-8 animate-spin mr-2" /> Cargando historial...
+      <div className="min-h-screen bg-gray-50/50 p-10 flex flex-col justify-center items-center text-gray-400">
+        <Loader2 className="h-10 w-10 animate-spin mb-3 text-blue-600" /> 
+        <p>Cargando historial clínico...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
+    <div className="min-h-screen bg-gray-50/50 p-6 md:p-10">
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header */}
@@ -102,7 +135,6 @@ export function MedicalHistory() {
                     <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Edad</p>
                     <p className="text-lg font-bold text-gray-900">{profile?.edad || '-'} años</p>
                   </div>
-                  {/* (Opcionales si tienes los datos) */}
                   <div className="p-4 bg-gray-50 rounded-xl text-center border border-gray-100">
                     <Ruler className="h-5 w-5 text-blue-500 mx-auto mb-2" />
                     <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Altura</p>
@@ -175,8 +207,11 @@ export function MedicalHistory() {
                             <Stethoscope className="h-6 w-6" />
                           </div>
                           <div>
+                            {/* AQUÍ USAMOS EL HELPER SEGURO */}
                             <h3 className="font-bold text-lg text-gray-900">{getDoctorName(record)}</h3>
+                            
                             <Badge variant="secondary" className="mt-1 bg-gray-100 text-gray-600 hover:bg-gray-200 border-0">
+                              {/* AQUÍ TAMBIÉN USAMOS EL HELPER */}
                               {getSpecialty(record)}
                             </Badge>
                           </div>

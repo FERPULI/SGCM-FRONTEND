@@ -155,15 +155,27 @@ export interface AdminDashboardStats {
 // (Esta era la que tenías duplicada, la he borrado y dejado una sola)
 export interface Appointment {
   id: number;
-  paciente_id: number;
-  medico_id: number;
-  fecha: string;
-  hora: string;
+  fecha_hora_inicio: string;
+  fecha_hora_fin?: string;
   estado: AppointmentStatus;
-  motivo: string;
-  pacienteNombre?: string; 
-  medicoNombre?: string;
-  especialidad?: string;
+  motivo_consulta?: string;
+  
+  // Estructura actualizada según el Backend
+  medico: {
+    id: number;
+    nombre_completo: string;
+    telefono_consultorio?: string;
+    // 👇 AHORA ES UN OBJETO, NO UN STRING O NULL
+    especialidad: {
+      id: number;
+      nombre: string;
+    };
+  };
+  
+  paciente: {
+    id: number;
+    nombre_completo: string;
+  };
 }
 
 // --- Tipos de Autenticación ---
@@ -267,12 +279,19 @@ export interface PatientDashboardStats {
   };
   proxima_cita: {
     id: number;
-    fecha_hora_inicio: string; // "2025-11-20 10:00:00"
+    fecha_hora_inicio: string;
+    estado: string; // "programada"
+    motivo_consulta: string;
     medico: {
+      id: number;
       nombre_completo: string;
-      especialidad: string;
+      // 👇 IMPORTANTE: Ahora es un objeto
+      especialidad: {
+        id: number;
+        nombre: string;
+      };
     };
-  } | null; // Puede ser null si no hay citas
+  } | null;
 }
 export interface AvailableSlotsResponse {
   fecha: string;
@@ -288,31 +307,24 @@ export interface CreateAppointmentPayload {
 }
 export interface MedicalRecord {
   id: number;
-  paciente_id: number;
-  medico_id: number;
-  cita_id: number;
-  fecha: string; // "YYYY-MM-DD" o ISO
+  fecha: string; // YYYY-MM-DD
   diagnostico: string;
   tratamiento: string;
   notas?: string;
-  archivos_adjuntos?: string; // URL o JSON string
-  created_at?: string;
+  archivos_adjuntos?: boolean; // Para saber si mostrar botón de descarga
   
-  // Relaciones (opcionales si vienen anidadas)
-  medico?: {
-    id: number;
-    nombre_completo: string; // O 'user.nombre_completo' según tu API
-    especialidad?: { nombre: string };
+  // Relación con médico (puede venir anidada)
+  medico: {
+    nombre: string; // o nombre_completo
+    especialidad: string; // o especialidad.nombre
   };
-  // Propiedades calculadas en frontend si la API no las trae directas
-  medicoNombre?: string; 
 }
-
 export interface PatientClinicalProfile {
   tipo_sangre: string;
-  altura: string; // ej: "1.75 m"
-  peso: string;   // ej: "70 kg"
+  edad: number;
   alergias: string;
   condiciones_cronicas: string;
-  edad: number;
+  // Campos opcionales (si no están en tu BD, mostraremos '-')
+  altura?: string; 
+  peso?: string;   
 }

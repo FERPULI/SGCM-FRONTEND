@@ -30,37 +30,26 @@ export const patientService = {
    */
   getMyAppointments: async (): Promise<Appointment[]> => {
     try {
-      // 1. Intentamos recuperar el paciente_id del localStorage para ayudar al backend
+      // Recuperamos el ID del paciente
       let pacienteId: number | undefined;
       const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
       
       if (userData) {
         const user = JSON.parse(userData);
-        // Intentamos sacar el ID del objeto anidado o del usuario como fallback
         pacienteId = user.paciente?.id || user.id; 
       }
 
-      console.log("Solicitando citas para paciente_id:", pacienteId);
-
-      // 2. Hacemos la petición enviando el ID como parámetro
       const response = await http.get<any>(API_ENDPOINTS.PACIENTE.CITAS, {
-        params: {
-          paciente_id: pacienteId // <-- Esto ayuda si el backend no infiere el usuario
-        }
+        params: { paciente_id: pacienteId }
       });
       
-      // 3. Manejo robusto de la respuesta (Array directo vs Paginado)
-      if (Array.isArray(response.data)) {
-        return response.data; 
-      } 
-      if (response.data && Array.isArray(response.data.data)) {
-        return response.data.data; 
-      }
+      if (Array.isArray(response.data)) return response.data; 
+      if (response.data && Array.isArray(response.data.data)) return response.data.data;
       
       return [];
     } catch (error) {
       console.error("Error obteniendo citas:", error);
-      throw error; // Lanzamos el error para que el componente muestre el Toast
+      return [];
     }
   },
 /**
@@ -68,7 +57,7 @@ export const patientService = {
    */
   getMedicalHistory: async (): Promise<MedicalRecord[]> => {
     try {
-      // Recuperamos el ID del paciente (igual que en citas)
+      // Recuperamos ID
       let pacienteId: number | undefined;
       const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
       if (userData) {
@@ -79,58 +68,66 @@ export const patientService = {
       const response = await http.get<any>(API_ENDPOINTS.PACIENTE.HISTORIAL, {
         params: { paciente_id: pacienteId }
       });
-      
-      // Adaptador robusto
-      if (Array.isArray(response.data)) return response.data;
-      if (response.data && Array.isArray(response.data.data)) return response.data.data;
-      
-      return [];
+
+      // Adaptador robusto para diferentes respuestas de API
+      const data = Array.isArray(response.data) 
+        ? response.data 
+        : response.data?.data || [];
+
+      return data;
     } catch (error) {
       console.error("Error historial:", error);
       return [];
     }
   },
-
   /**
    * Obtener Perfil Clínico (Datos biológicos)
    * Extrae datos del objeto 'paciente' guardado en localStorage o pide al backend
    */
   getClinicalProfile: async (): Promise<PatientClinicalProfile> => {
     try {
-      // Opción A: Leer del usuario actual en localStorage (más rápido)
+      // Estrategia Mixta: 
+      // 1. Intentamos leer del localStorage (lo más rápido) para datos básicos
+      // 2. Calculamos la edad
       const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+      let profile: PatientClinicalProfile = {
+        tipo_sangre: '-',
+        edad: 0,
+        alergias: 'Ninguna conocida',
+        condiciones_cronicas: 'Ninguna',
+        altura: '-',
+        peso: '-'
+      };
+
       if (userData) {
         const user = JSON.parse(userData);
         const paciente = user.paciente;
 
         if (paciente) {
-          // Calcular edad aproximada
+          // Calcular edad
           let edad = 0;
           if (paciente.fecha_nacimiento) {
             const hoy = new Date();
-            const cumpleanos = new Date(paciente.fecha_nacimiento);
-            edad = hoy.getFullYear() - cumpleanos.getFullYear();
+            const nac = new Date(paciente.fecha_nacimiento);
+            edad = hoy.getFullYear() - nac.getFullYear();
           }
 
-          return {
+          profile = {
+            ...profile,
             tipo_sangre: paciente.tipo_sangre || '-',
-            altura: '-', // Si no tienes este campo en BD, pon '-'
-            peso: '-',   // Si no tienes este campo en BD, pon '-'
-            alergias: paciente.alergias || 'Ninguna conocida',
-            condiciones_cronicas: '-',
-            edad: edad
+            alergias: paciente.alergias || 'Ninguna',
+            edad: edad,
           };
         }
       }
-    // Opción B: Si necesitas pedirlo a la API (si hay endpoint)
-      // const response = await http.get<PatientClinicalProfile>(API_ENDPOINTS.PACIENTE.PROFILE);
-      // return response.data;
+      
+      // Si tuvieras un endpoint específico para datos biométricos (peso/altura), lo llamarías aquí.
+      // const response = await http.get(...) 
+      
+      return profile;
 
-      return { tipo_sangre: '-', altura: '-', peso: '-', alergias: '-', condiciones_cronicas: '-', edad: 0 };
     } catch (error) {
-      return { tipo_sangre: '-', altura: '-', peso: '-', alergias: '-', condiciones_cronicas: '-', edad: 0 };
+      return { tipo_sangre: '-', edad: 0, alergias: '-', condiciones_cronicas: '-' };
     }
-    
-    }
-
+  }
 };
