@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 // Servicios y Tipos
 import { especialidadService } from '../../services/especialidad.service';
-import { doctorService } from '../../services/doctor.service';
+import { doctorService } from '../../services/doctors.service';
 import { appointmentsService } from '../../services/appointments.service';
 import { Especialidad, DoctorDirectoryItem, User as UserType } from '../../types';
 

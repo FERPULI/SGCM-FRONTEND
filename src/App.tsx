@@ -1,28 +1,27 @@
-// --- (Todos tus imports de antes) ---
 import { useState, useEffect } from "react";
 import { Login } from "./components/auth/Login";
 import { Register } from "./components/auth/Register";
 import { MainLayout } from "./components/layout/MainLayout";
-// ... (imports de dashboards)
 import { PatientDashboard } from "./components/patient/PatientDashboard";
-import { AdminDashboard } from "./components/admin/AdminDashboard";
-import { UserManagement } from "./components/admin/UserManagement";
-import { AppointmentManagement } from "./components/admin/AppointmentManagement"; 
-import { Reports } from "./components/admin/Reports"; 
-import { Settings } from "./components/admin/Settings"; 
-import { DoctorDashboard } from "./components/doctor/DoctorDashboard"; 
-import { DoctorManagement } from "./components/admin/DoctorManagement"; // <-- ¡NUEVO!
-// ... (imports de Paciente y Médico) ...
 import { PatientAppointments } from "./components/patient/PatientAppointments";
 import { BookAppointment } from "./components/patient/BookAppointment";
 import { PatientCalendar } from "./components/patient/PatientCalendar";
 import { MedicalHistory } from "./components/patient/MedicalHistory";
 import { PatientProfile } from "./components/patient/PatientProfile";
+
+// [SOLUCIÓN DEL ERROR] IMPORTACIÓN CON LLAVES
+import { DoctorDashboard } from "./components/doctor/DoctorDashboard"; 
+
 import { DoctorAppointments } from "./components/doctor/DoctorAppointments";
 import { DoctorCalendar } from "./components/doctor/DoctorCalendar";
 import { PatientDetails } from "./components/doctor/PatientDetails";
 import { DoctorProfile } from "./components/doctor/DoctorProfile";
-
+import { AdminDashboard } from "./components/admin/AdminDashboard";
+import { UserManagement } from "./components/admin/UserManagement";
+import { AppointmentManagement } from "./components/admin/AppointmentManagement"; 
+import { Reports } from "./components/admin/Reports"; 
+import { Settings } from "./components/admin/Settings"; 
+import { DoctorManagement } from "./components/admin/DoctorManagement";
 import { User } from "./types";
 import { Toaster } from "./components/ui/sonner";
 import { authService } from "./services/auth.service";
@@ -38,14 +37,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // (Tu 'checkAuth' useEffect está perfecto)
     const checkAuth = async () => {
       const token = storage.getAccessToken();
       if (token) {
         try {
           const user = await authService.getCurrentUser();
           setCurrentUser(user);
-        } catch (err) { storage.clear(); }
+        } catch (err) { storage.clear(); setCurrentUser(null); }
       }
       setIsLoading(false);
     };
@@ -53,145 +51,83 @@ export default function App() {
   }, []);
 
   const handleLogin = async (email: string, password: string) => {
-    // (Tu 'handleLogin' está perfecto)
-    setError(null);
-    setIsLoading(true);
+    setError(null); setIsLoading(true);
     try {
       const response = await authService.login({ email, password });
-      setCurrentUser(response.user);
-      setCurrentPage('inicio');
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
+      setCurrentUser(response.user); setCurrentPage('inicio');
+    } catch (error: any) { setError(error.message || "Error al iniciar sesión"); } finally { setIsLoading(false); }
   };
 
-  const handleLogout = () => {
-    authService.logout();
-    setCurrentUser(null);
-  };
+  const handleLogout = () => { authService.logout(); setCurrentUser(null); setCurrentPage('inicio'); setAuthView('login'); };
 
   const handleRegister = async (data: any) => {
-    // (Tu 'handleRegister' está perfecto)
-    setError(null);
-    setIsLoading(true);
-    const registerData = {
-      nombre: data.nombre,
-      apellidos: data.apellidos,
-      email: data.email,
-      password: data.password,
-      password_confirmation: data.password_confirmation,
-    };
+    setError(null); setIsLoading(true);
     try {
-      const response = await authService.register(registerData as any); 
-      setCurrentUser(response.user);
-      setCurrentPage('inicio');
-    } catch (error: any) {
-      setError(error.message); 
-    } finally {
-      setIsLoading(false);
-    }
+      const response = await authService.register({ ...data, role: 'patient' }); 
+      setCurrentUser(response.user); setCurrentPage('inicio');
+    } catch (error: any) { setError(error.message || "Error en el registro"); } finally { setIsLoading(false); }
   };
 
-  const handleNavigate = (page: string) => {
-    setCurrentPage(page);
-  };
+  const handleNavigate = (page: string) => setCurrentPage(page);
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Cargando...</div>;
-  }
+  if (isLoading) return <div className="flex items-center justify-center min-h-screen">Cargando...</div>;
 
   if (!currentUser) {
-    // (Tu lógica de login/register está perfecta)
     return (
       <div>
-        {error && <div style={{ color: 'red', padding: '10px', background: '#ffeeee', textAlign: 'center' }}>{error}</div>}
-        {authView === 'login' ? (
-          <Login onLogin={handleLogin} onNavigateToRegister={() => { setError(null); setAuthView('register'); }} />
-        ) : (
-          <Register onRegister={handleRegister} onNavigateToLogin={() => { setError(null); setAuthView('login'); }} />
-        )}
+        {error && <div className="bg-red-50 text-red-600 p-3 text-center border-b border-red-100">{error}</div>}
+        {authView === 'login' ? <Login onLogin={handleLogin} onNavigateToRegister={() => { setError(null); setAuthView('register'); }} /> : <Register onRegister={handleRegister} onNavigateToLogin={() => { setError(null); setAuthView('login'); }} />}
+        <Toaster />
       </div>
     );
   }
 
-  // --- (MODIFICADO) renderContent ---
   const renderContent = () => {
-    // ROL PACIENTE
-    if (currentUser.rol === 'paciente') {
+    if (!currentUser.rol) return <div className="p-6">Cargando perfil...</div>;
+
+    if (currentUser.rol === 'patient' || currentUser.rol === 'paciente') {
       switch (currentPage) {
-        case 'inicio':
-          return <PatientDashboard onNavigate={handleNavigate} />;
-        case 'citas':
-          return <PatientAppointments onNavigate={handleNavigate} />;
-        case 'reservar-cita':
-          return <BookAppointment onNavigate={handleNavigate} user={currentUser} />;
-        case 'calendario':
-          return <PatientCalendar />;
-        case 'historial':
-          return <MedicalHistory />;
-        case 'perfil':
-          return <PatientProfile user={currentUser} />;
-        default:
-          return <PatientDashboard onNavigate={handleNavigate} />;
+        case 'inicio': return <PatientDashboard onNavigate={handleNavigate} />;
+        case 'citas': return <PatientAppointments onNavigate={handleNavigate} />;
+        case 'reservar-cita': return <BookAppointment onNavigate={handleNavigate} user={currentUser} />;
+        case 'calendario': return <PatientCalendar />;
+        case 'historial': return <MedicalHistory />;
+        case 'perfil': return <PatientProfile user={currentUser} />;
+        default: return <PatientDashboard onNavigate={handleNavigate} />;
       }
     }
 
-    // ROL MÉDICO
-    if (currentUser.rol === 'medico') {
+    if (currentUser.rol === 'doctor' || currentUser.rol === 'medico') {
       switch (currentPage) {
-        case 'inicio':
-          return <DoctorDashboard onNavigate={handleNavigate} />;
-        case 'citas':
-          return <DoctorAppointments />;
-        case 'calendario':
-          return <DoctorCalendar />;
-        case 'pacientes':
-          return <PatientDetails onNavigate={handleNavigate} />;
-        case 'perfil':
-          return <DoctorProfile user={currentUser} />;
-        default:
-          return <DoctorDashboard onNavigate={handleNavigate} />;
+        case 'inicio': 
+          // Pasamos user={currentUser}
+          return <DoctorDashboard onNavigate={handleNavigate} user={currentUser} />;
+        case 'citas': return <DoctorAppointments />;
+        case 'calendario': return <DoctorCalendar />;
+        case 'pacientes': return <PatientDetails onNavigate={handleNavigate} />;
+        case 'perfil': return <DoctorProfile user={currentUser} />;
+        default: return <DoctorDashboard onNavigate={handleNavigate} user={currentUser} />;
       }
     }
 
-    // ROL ADMIN
     if (currentUser.rol === 'admin') {
       switch (currentPage) {
-        case 'inicio':
-          return <AdminDashboard onNavigate={handleNavigate} />;
-        case 'usuarios':
-          return <UserManagement />; 
-        
-        // --- ¡CORREGIDO! ---
-        case 'medicos': 
-          return <DoctorManagement />; // <-- Carga el nuevo componente
-
-        case 'citas':
-          return <AppointmentManagement />; 
-        case 'reportes':
-          return <Reports />;
-        case 'configuracion':
-          return <Settings />;
-        case 'perfil':
-          return <div>Perfil de Admin (Próximamente)</div>;
-        default:
-          return <AdminDashboard onNavigate={handleNavigate} />;
+        case 'inicio': return <AdminDashboard onNavigate={handleNavigate} />;
+        case 'usuarios': return <UserManagement />; 
+        case 'medicos': return <DoctorManagement />;
+        case 'citas': return <AppointmentManagement />; 
+        case 'reportes': return <Reports />;
+        case 'configuracion': return <Settings />;
+        case 'perfil': return <div className="p-6">Perfil de Administrador</div>;
+        default: return <AdminDashboard onNavigate={handleNavigate} />;
       }
     }
-    return null; // Fallback
+    return <div className="p-6">Rol desconocido</div>;
   };
 
   return (
     <>
-      <MainLayout
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        user={currentUser}
-        onRoleSwitch={() => {}} // (No se usa)
-        onLogout={handleLogout} 
-      >
+      <MainLayout currentPage={currentPage} onNavigate={handleNavigate} user={currentUser} onRoleSwitch={() => {}} onLogout={handleLogout}>
         {renderContent()}
       </MainLayout>
       <Toaster />
