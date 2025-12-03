@@ -1,24 +1,21 @@
-// Types for the Medical Appointment Management System
+// src/types/index.ts
 
-// User roles (aligned with API)
-export type UserRole = 'admin' | 'doctor' | 'patient';
+// --- DEFINICIONES DE TIPOS BASE ---
+export type UserRole = 'admin' | 'doctor' | 'patient' | 'medico' | 'paciente'; // Agregamos variantes en español por seguridad
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
-// Appointment statuses (aligned with API)
-export type AppointmentStatus = 
-  | 'pending' 
-  | 'confirmed' 
-  | 'in_progress' 
-  | 'completed' 
-  | 'cancelled' 
-  | 'no_show';
+// --- INTERFACES PRINCIPALES ---
 
-// User interface (aligned with Laravel API)
+// User interface (Alineado con la respuesta API de Laravel)
 export interface User {
   id: number;
   name: string;
   email: string;
   phone?: string;
-  role: UserRole;
+  
+  // [IMPORTANTE] Cambiado de 'role' a 'rol' para coincidir con tu Backend
+  rol: UserRole; 
+  
   is_active: boolean;
   email_verified_at?: string | null;
   created_at: string;
@@ -39,7 +36,7 @@ export interface RegisterData {
   email: string;
   password: string;
   password_confirmation: string;
-  role: UserRole;
+  role: UserRole; // En el registro solemos enviar 'role', el backend lo mapea
   phone?: string;
 }
 
@@ -135,11 +132,67 @@ export interface DoctorSchedule {
   updated_at: string;
 }
 
-// Legacy types for backwards compatibility with existing components
+// Legacy types for backwards compatibility
 export interface DoctorAvailability {
   id: string;
   medicoId: string;
   diaSemana: number;
   horaInicio: string;
   horaFin: string;
+}
+
+// --- NUEVOS TIPOS PARA EL DASHBOARD DEL DOCTOR ---
+
+export interface DashboardStats {
+  appointments_today: number;
+  pending_appointments: number;
+  upcoming_appointments: number;
+  unique_patients_month: number;
+}
+
+export interface DoctorDashboardData {
+  stats: DashboardStats;
+  today_appointments: Appointment[];
+  pending_appointments: Appointment[];
+  recent_patients: Patient[];
+}
+
+// --- TIPOS DE UTILIDAD Y PAGINACIÓN (Necesarios para services) ---
+
+export interface UserFilters {
+  q?: string;
+  role?: string;
+  page?: number;
+  per_page?: number;
+  specialty?: string;
+}
+
+// Estructura para el directorio de médicos (puede ser igual a Doctor o extendida)
+export type DoctorDirectoryItem = Doctor; 
+
+// Estructura de paginación estándar de Laravel
+export interface PaginatedResponse<T> {
+  data: T[];
+  links: {
+    first: string | null;
+    last: string | null;
+    prev: string | null;
+    next: string | null;
+  };
+  meta: {
+    current_page: number;
+    from: number;
+    last_page: number;
+    path: string;
+    per_page: number;
+    to: number;
+    total: number;
+    // Stats generales opcionales para vistas de directorio
+    stats_generales?: {
+      totalMedicos: number;
+      totalEspecialidades: number;
+      totalCitas: number;
+      totalPacientesAtendidos: number;
+    };
+  };
 }
