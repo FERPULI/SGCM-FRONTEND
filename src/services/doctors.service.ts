@@ -1,4 +1,5 @@
-import { http } from './http';
+// --- CORRECCIÓN AQUÍ: Agregamos llaves { } para importar 'http' ---
+import { http } from './http'; 
 import { API_ENDPOINTS } from '../config/api';
 import { 
   DoctorDirectoryItem, 
@@ -8,6 +9,7 @@ import {
   Appointment 
 } from '../types'; 
 
+// Objeto vacío por defecto para evitar errores de null
 const emptyPaginatedResponse: PaginatedResponse<DoctorDirectoryItem> = {
   data: [],
   links: { first: null, last: null, prev: null, next: null },
@@ -18,21 +20,26 @@ export const doctorService = {
   
   getMedicosDirectory: async (filters?: UserFilters) => {
     try {
-      const response = await http.get<PaginatedResponse<DoctorDirectoryItem>>(API_ENDPOINTS.MEDICOS.LIST, { params: filters });
+      // Si API_ENDPOINTS no está definido, usa la ruta harcodeada '/medicos'
+      // Aseguramos que API_ENDPOINTS existe para evitar otro crash si no lo tienes configurado aún
+      const url = (API_ENDPOINTS && API_ENDPOINTS.MEDICOS && API_ENDPOINTS.MEDICOS.LIST) ? API_ENDPOINTS.MEDICOS.LIST : '/medicos'; 
+      const response = await http.get<PaginatedResponse<DoctorDirectoryItem>>(url, { params: filters });
       return response.data || emptyPaginatedResponse;
     } catch (e) { return emptyPaginatedResponse; }
   },
 
   getDashboardData: async (): Promise<DoctorDashboardData | null> => {
     try {
+      // 1. Obtenemos todas las citas
       const response = await http.get('/citas'); 
       const rawCitas = response.data.data || response.data || [];
 
-      // Mapeo robusto
+      // 2. Mapeo robusto (Normalización de datos)
       const citas: Appointment[] = rawCitas.map((cita: any) => {
         const p = cita.paciente || {};
         const u = p.user || p.usuario || {}; 
         
+        // Intentamos obtener nombre de varios lugares posibles
         const nombre = u.name || u.nombre || p.nombre || p.first_name || 'Paciente';
         const apellido = u.last_name || u.apellidos || p.apellidos || p.last_name || '';
         // Soporte para ambos nombres de campo de fecha
@@ -49,11 +56,16 @@ export const doctorService = {
             id: p.id || 0,
             first_name: nombre,
             last_name: apellido,
-            gender: p.gender || p.genero || 'other'
+            gender: p.gender || p.genero || 'other',
+            user_id: p.user_id || 0, 
+            date_of_birth: p.date_of_birth || '',
+            created_at: '',
+            updated_at: ''
           }
-        };
+        } as Appointment;
       });
 
+      // 3. Filtrado y cálculos en el Frontend
       const hoyStr = new Date().toISOString().split('T')[0];
       const citasHoy = citas.filter(c => c.appointment_date?.toString().startsWith(hoyStr));
       const citasPendientes = citas.filter(c => c.status === 'pendiente');
