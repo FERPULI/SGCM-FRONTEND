@@ -1,53 +1,46 @@
 // src/types/index.ts
 
 // --- DEFINICIONES DE TIPOS BASE ---
-export type UserRole = 'admin' | 'doctor' | 'patient' | 'medico' | 'paciente'; // Agregamos variantes en español por seguridad
+
+// Roles de usuario (Incluye variantes en español para robustez)
+export type UserRole = 'admin' | 'doctor' | 'patient' | 'medico' | 'paciente';
+
+// Estados de la cita (Mapeados a los Badges visuales del Dashboard)
+// pending: Gris (Pendiente)
+// confirmed: Negro/Azul oscuro (Activa/Confirmada)
+// completed: Tachado/Gris (Completada)
+// cancelled: Rojo (Cancelada)
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
-// --- INTERFACES PRINCIPALES ---
+// Genero
+export type Gender = 'male' | 'female' | 'other';
 
-// User interface (Alineado con la respuesta API de Laravel)
+// --- INTERFACES PRINCIPALES (Modelos Eloquent) ---
+
+// User interface (Base de autenticación)
 export interface User {
   id: number;
-  name: string;
+  name: string; // Nombre de usuario o display name
   email: string;
   phone?: string;
-  
-  // [IMPORTANTE] Cambiado de 'role' a 'rol' para coincidir con tu Backend
-  rol: UserRole; 
-  
+  rol: UserRole; // [IMPORTANTE] Mapeado a 'rol' del backend
   is_active: boolean;
   email_verified_at?: string | null;
   created_at: string;
   updated_at: string;
+  // Relaciones opcionales dependiendo de si se carga con 'with()'
   patient?: Patient;
   doctor?: Doctor;
 }
 
-// Login credentials
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-// Registration data
-export interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  password_confirmation: string;
-  role: UserRole; // En el registro solemos enviar 'role', el backend lo mapea
-  phone?: string;
-}
-
-// Patient interface
+// Patient interface (Datos demográficos)
 export interface Patient {
   id: number;
   user_id: number;
   first_name: string;
   last_name: string;
   date_of_birth: string;
-  gender: 'male' | 'female' | 'other';
+  gender: Gender;
   address?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -56,10 +49,10 @@ export interface Patient {
   chronic_conditions?: string;
   created_at: string;
   updated_at: string;
-  user?: User;
+  user?: User; // Relación inversa
 }
 
-// Doctor interface
+// Doctor interface (Datos profesionales)
 export interface Doctor {
   id: number;
   user_id: number;
@@ -74,15 +67,15 @@ export interface Doctor {
   is_available: boolean;
   created_at: string;
   updated_at: string;
-  user?: User;
+  user?: User; // Relación inversa
 }
 
-// Appointment interface
+// Appointment interface (La Cita Médica)
 export interface Appointment {
   id: number;
   patient_id: number;
   doctor_id: number;
-  appointment_date: string;
+  appointment_date: string; // DateTime string del backend (YYYY-MM-DD HH:mm:ss)
   status: AppointmentStatus;
   reason: string;
   notes?: string;
@@ -90,11 +83,14 @@ export interface Appointment {
   completion_notes?: string;
   created_at: string;
   updated_at: string;
+  
+  // Relaciones cargadas (Eager Loading)
   patient?: Patient;
   doctor?: Doctor;
+  medical_record?: MedicalRecord;
 }
 
-// Medical record interface
+// Medical Record interface (Historial)
 export interface MedicalRecord {
   id: number;
   patient_id: number;
@@ -112,7 +108,7 @@ export interface MedicalRecord {
     weight?: number;
     height?: number;
   };
-  attachments?: string[];
+  attachments?: string[]; // Array de URLs o paths
   created_at: string;
   updated_at: string;
   patient?: Patient;
@@ -120,28 +116,35 @@ export interface MedicalRecord {
   appointment?: Appointment;
 }
 
-// Doctor schedule interface
+// Doctor Schedule (Horarios)
 export interface DoctorSchedule {
   id: number;
   doctor_id: number;
-  day_of_week: number; // 0-6 (Sunday to Saturday)
-  start_time: string; // HH:mm format
-  end_time: string; // HH:mm format
+  day_of_week: number; // 0-6 (Domingo a Sábado)
+  start_time: string; // Formato HH:mm
+  end_time: string;   // Formato HH:mm
   is_available: boolean;
   created_at: string;
   updated_at: string;
 }
 
-// Legacy types for backwards compatibility
-export interface DoctorAvailability {
-  id: string;
-  medicoId: string;
-  diaSemana: number;
-  horaInicio: string;
-  horaFin: string;
+// --- DTOs PARA FORMULARIOS Y AUTH ---
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
 }
 
-// --- NUEVOS TIPOS PARA EL DASHBOARD DEL DOCTOR ---
+export interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+  role: UserRole;
+  phone?: string;
+}
+
+// --- TIPOS PARA EL DASHBOARD (Estadísticas y Vistas) ---
 
 export interface DashboardStats {
   appointments_today: number;
@@ -150,6 +153,7 @@ export interface DashboardStats {
   unique_patients_month: number;
 }
 
+// Estructura completa de la respuesta del Dashboard del Doctor
 export interface DoctorDashboardData {
   stats: DashboardStats;
   today_appointments: Appointment[];
@@ -157,20 +161,19 @@ export interface DoctorDashboardData {
   recent_patients: Patient[];
 }
 
-// --- TIPOS DE UTILIDAD Y PAGINACIÓN (Necesarios para services) ---
+// --- UTILIDADES DE FILTRADO Y PAGINACIÓN ---
 
 export interface UserFilters {
-  q?: string;
-  role?: string;
+  q?: string;          // Búsqueda general
+  role?: string;       // Filtro por rol
+  status?: string;     // Filtro por estado de cita
+  date?: string;       // Filtro por fecha
   page?: number;
   per_page?: number;
   specialty?: string;
 }
 
-// Estructura para el directorio de médicos (puede ser igual a Doctor o extendida)
-export type DoctorDirectoryItem = Doctor; 
-
-// Estructura de paginación estándar de Laravel
+// Estructura de paginación estándar de Laravel (LengthAwarePaginator)
 export interface PaginatedResponse<T> {
   data: T[];
   links: {
@@ -187,7 +190,7 @@ export interface PaginatedResponse<T> {
     per_page: number;
     to: number;
     total: number;
-    // Stats generales opcionales para vistas de directorio
+    // Stats opcionales para respuestas complejas
     stats_generales?: {
       totalMedicos: number;
       totalEspecialidades: number;
@@ -195,4 +198,13 @@ export interface PaginatedResponse<T> {
       totalPacientesAtendidos: number;
     };
   };
+}
+
+// Tipos Legacy (Mantener solo si es estrictamente necesario para compatibilidad hacia atrás)
+export interface DoctorAvailability {
+  id: string;
+  medicoId: string;
+  diaSemana: number;
+  horaInicio: string;
+  horaFin: string;
 }
