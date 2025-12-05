@@ -4,7 +4,7 @@
  */
 import { http } from './http';
 import { API_ENDPOINTS, STORAGE_KEYS } from '../config/api';
-import { PatientDashboardStats, Appointment } from '../types';
+import { PatientDashboardStats, Appointment, MedicalRecord, PatientClinicalProfile } from '../types';
 
 const emptyDashboard: PatientDashboardStats = {
   resumen: { citas_programadas: 0, historial_completado: 0 },
