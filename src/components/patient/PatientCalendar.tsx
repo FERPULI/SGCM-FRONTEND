@@ -83,6 +83,21 @@ export function PatientCalendar() {
     return isSameDay(appDate, selectedDay);
   }).sort((a, b) => new Date(a.fecha_hora_inicio).getTime() - new Date(b.fecha_hora_inicio).getTime());
 
+  // Obtener las próximas 3 citas
+  const getProximasCitas = () => {
+    const ahora = new Date();
+    return (appointments || [])
+      .filter(app => {
+        const fechaCita = parseDate(app.fecha_hora_inicio);
+        const estadosValidos = ['programada', 'pendiente', 'confirmada', 'activa'];
+        return fechaCita >= ahora && estadosValidos.includes(app.estado);
+      })
+      .sort((a, b) => parseDate(a.fecha_hora_inicio).getTime() - parseDate(b.fecha_hora_inicio).getTime())
+      .slice(0, 3);
+  };
+
+  const proximasCitas = getProximasCitas();
+
   // --- Estilos de Estado ---
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -120,20 +135,20 @@ export function PatientCalendar() {
           onClick={() => setSelectedDay(dateObj)}
           className={`
             min-h-[80px] md:min-h-[100px] border-b border-r border-gray-100 p-2 cursor-pointer transition-all relative group flex flex-col
-            ${isSelected ? 'bg-white ring-2 ring-inset ring-blue-600 z-10 shadow-lg' : 'hover:bg-gray-50 bg-white'}
-            ${isToday && !isSelected ? 'bg-yellow-50/40' : ''}
-            ${hasEvents && !isSelected ? 'bg-blue-50/20' : ''}
+            ${isSelected ? 'bg-blue-600 text-white ring-2 ring-inset ring-blue-500 z-10 shadow-lg' : 'hover:bg-gray-50 bg-white'}
+            ${isToday && !isSelected ? 'bg-blue-50 border-blue-200' : ''}
+            ${hasEvents && !isSelected ? 'bg-blue-100/40 border-blue-200' : ''}
           `}
         >
           <div className="flex justify-between items-start mb-1">
             <span className={`
               text-xs md:text-sm font-semibold w-6 h-6 flex items-center justify-center rounded-full transition-all
-              ${isToday ? 'bg-blue-600 text-white shadow-md' : isSelected ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-700'}
+              ${isToday && !isSelected ? 'bg-blue-600 text-white shadow-md' : isSelected ? 'text-white font-bold bg-blue-500' : hasEvents ? 'text-blue-700 font-bold' : 'text-gray-700'}
             `}>
               {day}
             </span>
             {/* Indicador Móvil */}
-            {hasEvents && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 md:hidden"></div>}
+            {hasEvents && !isSelected && <div className="w-1.5 h-1.5 rounded-full bg-blue-600 md:hidden"></div>}
           </div>
 
           {/* Lista de eventos (Escritorio) */}
@@ -141,14 +156,18 @@ export function PatientCalendar() {
             {dayAppointments.slice(0, 2).map((app, i) => (
               <div 
                 key={i} 
-                className={`text-[9px] px-1 py-0.5 rounded border truncate font-medium ${getStatusColor(app.estado)}`}
+                className={`text-[9px] px-1 py-0.5 rounded border truncate font-medium ${
+                  isSelected 
+                    ? 'bg-white/20 text-white border-white/30' 
+                    : getStatusColor(app.estado)
+                }`}
                 title={`${app.medico?.nombre_completo}`}
               >
                 {new Date(app.fecha_hora_inicio).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} {app.medico?.nombre_completo?.split(' ')[1]}
               </div>
             ))}
             {dayAppointments.length > 2 && (
-              <span className="text-[9px] text-gray-400 pl-1 font-medium">+{dayAppointments.length - 2}</span>
+              <span className={`text-[9px] pl-1 font-medium ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>+{dayAppointments.length - 2}</span>
             )}
           </div>
         </div>
@@ -260,6 +279,62 @@ export function PatientCalendar() {
           </div>
 
         </div>
+
+        {/* Próximas Citas */}
+        {proximasCitas.length > 0 && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Próximas Citas</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {proximasCitas.map((cita) => {
+                const especialidad = cita.especialidad || 
+                                   (typeof cita.medico?.especialidad === 'object' 
+                                     ? cita.medico?.especialidad?.nombre 
+                                     : cita.medico?.especialidad) || 
+                                   "General";
+                
+                return (
+                  <Card key={cita.id} className="border-0 shadow-sm bg-white hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {cita.medico?.nombre_completo || cita.medico?.nombre || "Médico Asignado"}
+                          </h3>
+                          <p className="text-sm text-blue-600">{especialidad}</p>
+                        </div>
+                        <Badge className={`capitalize ${getStatusColor(cita.estado)}`}>
+                          {cita.estado}
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4" />
+                          <span>{parseDate(cita.fecha_hora_inicio).toLocaleDateString('es-ES', { 
+                            day: 'numeric', month: 'long', year: 'numeric' 
+                          })}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>{parseDate(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { 
+                            hour: '2-digit', minute: '2-digit' 
+                          })}</span>
+                        </div>
+                        {cita.motivo_consulta && (
+                          <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-100">
+                            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <span className="text-xs line-clamp-2">{cita.motivo_consulta}</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
