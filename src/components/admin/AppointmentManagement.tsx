@@ -29,25 +29,34 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { StatusBadge } from "../shared/StatusBadge";
 import { Appointment, AppointmentStatus } from "../../types";
-import { Search, Plus, Edit, Trash2, Calendar as CalendarIcon } from "lucide-react";
+import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import { Calendar } from "../ui/calendar";
 import { Textarea } from "../ui/textarea";
 
+// Modificamos la interface para que sea opcional y evitar crasheos si no se pasan datos
 interface AppointmentManagementProps {
-  appointments: Appointment[];
+  appointments?: Appointment[];
 }
 
-export function AppointmentManagement({ appointments }: AppointmentManagementProps) {
+// Definimos un array vacío por defecto en los props: { appointments = [] }
+export function AppointmentManagement({ appointments = [] }: AppointmentManagementProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<AppointmentStatus | "todas">("todas");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
-  const filteredAppointments = appointments.filter(appointment => {
+  // Aseguramos que safeAppointments sea siempre un array
+  const safeAppointments = Array.isArray(appointments) ? appointments : [];
+
+  const filteredAppointments = safeAppointments.filter(appointment => {
+    // Protegemos contra valores nulos en los nombres
+    const pNombre = appointment.pacienteNombre || "";
+    const mNombre = appointment.medicoNombre || "";
+
     const matchesSearch = 
-      appointment.pacienteNombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appointment.medicoNombre.toLowerCase().includes(searchTerm.toLowerCase());
+      pNombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mNombre.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesTab = activeTab === "todas" || appointment.estado === activeTab;
     
@@ -55,11 +64,15 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
   });
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    try {
+      return new Date(date).toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } catch (e) {
+      return date; // Retorna el string original si falla el formateo
+    }
   };
 
   return (
@@ -80,7 +93,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{appointments.length}</p>
+              <p className="text-2xl">{safeAppointments.length}</p>
               <p className="text-sm text-gray-500">Total</p>
             </div>
           </CardContent>
@@ -88,7 +101,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{appointments.filter(a => a.estado === 'activa').length}</p>
+              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'activa').length}</p>
               <p className="text-sm text-gray-500">Activas</p>
             </div>
           </CardContent>
@@ -96,7 +109,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{appointments.filter(a => a.estado === 'pendiente').length}</p>
+              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'pendiente').length}</p>
               <p className="text-sm text-gray-500">Pendientes</p>
             </div>
           </CardContent>
@@ -104,7 +117,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{appointments.filter(a => a.estado === 'completada').length}</p>
+              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'completada').length}</p>
               <p className="text-sm text-gray-500">Completadas</p>
             </div>
           </CardContent>
@@ -112,7 +125,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{appointments.filter(a => a.estado === 'cancelada').length}</p>
+              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'cancelada').length}</p>
               <p className="text-sm text-gray-500">Canceladas</p>
             </div>
           </CardContent>
@@ -223,7 +236,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="paciente">Paciente</Label>
-              <Select defaultValue={editingAppointment?.pacienteId}>
+              <Select defaultValue={editingAppointment?.pacienteId?.toString()}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un paciente" />
                 </SelectTrigger>
@@ -235,7 +248,7 @@ export function AppointmentManagement({ appointments }: AppointmentManagementPro
             </div>
             <div className="space-y-2">
               <Label htmlFor="medico">Médico</Label>
-              <Select defaultValue={editingAppointment?.medicoId}>
+              <Select defaultValue={editingAppointment?.medicoId?.toString()}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un médico" />
                 </SelectTrigger>
