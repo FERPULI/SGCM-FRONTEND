@@ -13,34 +13,68 @@ import { Download, TrendingUp, Users, Calendar, Activity } from "lucide-react";
 import { Badge } from "../ui/badge";
 
 interface ReportsProps {
-  appointments: Appointment[];
+  // Hacemos que sea opcional en la interfaz para evitar conflictos de TS
+  appointments?: Appointment[]; 
 }
 
-export function Reports({ appointments }: ReportsProps) {
-  const monthlyAppointments = appointments.filter(a => {
+// CORRECCIÓN AQUÍ: Asignamos " = [] " para evitar que sea undefined
+export function Reports({ appointments = [] }: ReportsProps) {
+  
+  // Seguridad extra: Si por alguna razón sigue siendo null/undefined, forzamos array vacío
+  const safeAppointments = appointments || [];
+
+  // --- Lógica de Estadísticas ---
+  const totalAppointments = safeAppointments.length;
+
+  const monthlyAppointments = safeAppointments.filter(a => {
     const date = new Date(a.fecha);
     const now = new Date();
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length;
 
-  const completionRate = appointments.length > 0
-    ? ((appointments.filter(a => a.estado === 'completada').length / appointments.length) * 100).toFixed(1)
-    : 0;
+  const completedCount = safeAppointments.filter(a => a.estado === 'completada').length;
+  const completionRate = totalAppointments > 0
+    ? ((completedCount / totalAppointments) * 100).toFixed(1)
+    : "0.0";
 
-  const cancelRate = appointments.length > 0
-    ? ((appointments.filter(a => a.estado === 'cancelada').length / appointments.length) * 100).toFixed(1)
-    : 0;
+  const canceledCount = safeAppointments.filter(a => a.estado === 'cancelada').length;
+  const cancelRate = totalAppointments > 0
+    ? ((canceledCount / totalAppointments) * 100).toFixed(1)
+    : "0.0";
+
+  const uniquePatients = new Set(safeAppointments.map(a => a.pacienteId)).size;
+
+  // --- Renderizado de filas de estado (Helper) ---
+  const renderStatusRow = (label: string, count: number, colorDot: string) => {
+    const percentage = totalAppointments > 0 ? ((count / totalAppointments) * 100).toFixed(0) : "0";
+    return (
+      <div className="flex items-center justify-between p-3 border border-gray-100 rounded-lg bg-white hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className={`w-3 h-3 rounded-full ${colorDot}`} />
+          <span className="text-sm font-medium text-gray-700">{label}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-gray-900">{count}</span>
+          <Badge variant="secondary" className="bg-gray-100 text-gray-600 hover:bg-gray-200">
+            {percentage}%
+          </Badge>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      
+      {/* --- ENCABEZADO --- */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl">Reportes y Estadísticas</h1>
-          <p className="text-gray-500 mt-1">Analítica y reportes del sistema</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reportes y Estadísticas</h1>
+          <p className="text-gray-500 text-sm mt-1">Analítica y reportes del sistema</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Select defaultValue="mes">
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-[160px] bg-white border-gray-200">
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
@@ -50,162 +84,120 @@ export function Reports({ appointments }: ReportsProps) {
               <SelectItem value="ano">Año</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
             <Download className="h-4 w-4 mr-2" />
             Exportar
           </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
+      {/* --- TARJETAS DE RESUMEN (KPIs) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        {/* Total Citas */}
+        <Card className="shadow-sm border-gray-100 bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Total Citas</CardTitle>
-            <Calendar className="h-4 w-4 text-gray-500" />
+            <CardTitle className="text-sm font-medium text-gray-500">Total Citas</CardTitle>
+            <Calendar className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{appointments.length}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {monthlyAppointments} este mes
-            </p>
+            <div className="text-2xl font-bold text-gray-900">{totalAppointments}</div>
+            <p className="text-xs text-gray-500 mt-1">{monthlyAppointments} este mes</p>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Tasa de Completación */}
+        <Card className="shadow-sm border-gray-100 bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Tasa de Completación</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Tasa de Completación</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{completionRate}%</div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+            <div className="text-2xl font-bold text-gray-900">{completionRate}%</div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
               <div 
-                className="bg-green-600 h-2 rounded-full" 
+                className="bg-green-500 h-1.5 rounded-full transition-all duration-500" 
                 style={{ width: `${completionRate}%` }} 
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Tasa de Cancelación */}
+        <Card className="shadow-sm border-gray-100 bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Tasa de Cancelación</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Tasa de Cancelación</CardTitle>
             <Activity className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{cancelRate}%</div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+            <div className="text-2xl font-bold text-gray-900">{cancelRate}%</div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
               <div 
-                className="bg-red-600 h-2 rounded-full" 
+                className="bg-red-500 h-1.5 rounded-full transition-all duration-500" 
                 style={{ width: `${cancelRate}%` }} 
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Pacientes Únicos */}
+        <Card className="shadow-sm border-gray-100 bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Pacientes Únicos</CardTitle>
-            <Users className="h-4 w-4 text-gray-500" />
+            <CardTitle className="text-sm font-medium text-gray-500">Pacientes Únicos</CardTitle>
+            <Users className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">
-              {new Set(appointments.map(a => a.pacienteId)).size}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Este período
-            </p>
+            <div className="text-2xl font-bold text-gray-900">{uniquePatients}</div>
+            <p className="text-xs text-gray-500 mt-1">Este período</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Detailed Reports */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Reportes Detallados</CardTitle>
+      {/* --- SECCIÓN DE REPORTES DETALLADOS (TABS) --- */}
+      <Card className="shadow-sm border-gray-100 bg-white">
+        <CardHeader className="border-b border-gray-50 pb-4">
+          <CardTitle className="text-lg text-gray-900">Reportes Detallados</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="citas">
-            <TabsList>
-              <TabsTrigger value="citas">Citas</TabsTrigger>
-              <TabsTrigger value="medicos">Médicos</TabsTrigger>
-              <TabsTrigger value="pacientes">Pacientes</TabsTrigger>
-              <TabsTrigger value="financiero">Financiero</TabsTrigger>
+        <CardContent className="pt-6">
+          <Tabs defaultValue="citas" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 lg:w-[400px] lg:grid-cols-4 mb-8 bg-gray-100 p-1 rounded-lg">
+              <TabsTrigger value="citas" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">Citas</TabsTrigger>
+              <TabsTrigger value="medicos" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">Médicos</TabsTrigger>
+              <TabsTrigger value="pacientes" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">Pacientes</TabsTrigger>
+              <TabsTrigger value="financiero" className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">Financiero</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="citas" className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-6">
+            {/* --- TAB: CITAS --- */}
+            <TabsContent value="citas" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Columna Izquierda: Estados */}
                 <div>
-                  <h4 className="text-sm mb-4">Distribución por Estado</h4>
+                  <h4 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wider text-xs">Distribución por Estado</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-blue-600 rounded-full" />
-                        <span className="text-sm">Activas</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm">{appointments.filter(a => a.estado === 'activa').length}</span>
-                        <Badge variant="secondary">
-                          {((appointments.filter(a => a.estado === 'activa').length / appointments.length) * 100).toFixed(0)}%
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-yellow-600 rounded-full" />
-                        <span className="text-sm">Pendientes</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm">{appointments.filter(a => a.estado === 'pendiente').length}</span>
-                        <Badge variant="secondary">
-                          {((appointments.filter(a => a.estado === 'pendiente').length / appointments.length) * 100).toFixed(0)}%
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-green-600 rounded-full" />
-                        <span className="text-sm">Completadas</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm">{appointments.filter(a => a.estado === 'completada').length}</span>
-                        <Badge variant="secondary">
-                          {((appointments.filter(a => a.estado === 'completada').length / appointments.length) * 100).toFixed(0)}%
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-red-600 rounded-full" />
-                        <span className="text-sm">Canceladas</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm">{appointments.filter(a => a.estado === 'cancelada').length}</span>
-                        <Badge variant="secondary">
-                          {((appointments.filter(a => a.estado === 'cancelada').length / appointments.length) * 100).toFixed(0)}%
-                        </Badge>
-                      </div>
-                    </div>
+                    {renderStatusRow('Activas', safeAppointments.filter(a => a.estado === 'activa').length, 'bg-blue-500')}
+                    {renderStatusRow('Pendientes', safeAppointments.filter(a => a.estado === 'pendiente').length, 'bg-yellow-500')}
+                    {renderStatusRow('Completadas', safeAppointments.filter(a => a.estado === 'completada').length, 'bg-green-500')}
+                    {renderStatusRow('Canceladas', safeAppointments.filter(a => a.estado === 'cancelada').length, 'bg-red-500')}
                   </div>
                 </div>
 
+                {/* Columna Derecha: Especialidades */}
                 <div>
-                  <h4 className="text-sm mb-4">Citas por Especialidad</h4>
-                  <div className="space-y-3">
-                    {[...new Set(appointments.map(a => a.especialidad))].map((especialidad) => {
-                      const count = appointments.filter(a => a.especialidad === especialidad).length;
-                      const percentage = ((count / appointments.length) * 100).toFixed(0);
+                  <h4 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wider text-xs">Citas por Especialidad</h4>
+                  <div className="space-y-5">
+                    {[...new Set(safeAppointments.map(a => a.especialidad))].map((especialidad) => {
+                      const count = safeAppointments.filter(a => a.especialidad === especialidad).length;
+                      const percentage = totalAppointments > 0 ? ((count / totalAppointments) * 100).toFixed(0) : "0";
                       
                       return (
                         <div key={especialidad} className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span>{especialidad}</span>
-                            <span>{count} ({percentage}%)</span>
+                            <span className="font-medium text-gray-700">{especialidad}</span>
+                            <span className="text-gray-500">{count} ({percentage}%)</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="w-full bg-gray-100 rounded-full h-2">
                             <div 
-                              className="bg-blue-600 h-2 rounded-full" 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out" 
                               style={{ width: `${percentage}%` }} 
                             />
                           </div>
@@ -217,125 +209,87 @@ export function Reports({ appointments }: ReportsProps) {
               </div>
             </TabsContent>
 
-            <TabsContent value="medicos" className="space-y-4 pt-4">
-              <div className="space-y-3">
-                {[...new Set(appointments.map(a => a.medicoNombre))].map((medico) => {
-                  const medicoAppointments = appointments.filter(a => a.medicoNombre === medico);
+            {/* --- TAB: MÉDICOS --- */}
+            <TabsContent value="medicos" className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {[...new Set(safeAppointments.map(a => a.medicoNombre))].map((medico) => {
+                  const medicoAppointments = safeAppointments.filter(a => a.medicoNombre === medico);
                   const completed = medicoAppointments.filter(a => a.estado === 'completada').length;
-                  const completionRate = medicoAppointments.length > 0 
+                  const rate = medicoAppointments.length > 0 
                     ? ((completed / medicoAppointments.length) * 100).toFixed(0)
-                    : 0;
+                    : "0";
                   
                   return (
-                    <Card key={medico}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h4 className="text-sm">{medico}</h4>
-                            <p className="text-xs text-gray-500">
-                              {appointments.find(a => a.medicoNombre === medico)?.especialidad}
-                            </p>
-                          </div>
-                          <Badge variant="outline">{medicoAppointments.length} citas</Badge>
+                    <div key={medico} className="p-4 border border-gray-100 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 className="font-bold text-gray-800">{medico}</h4>
+                                <p className="text-xs text-blue-500">{safeAppointments.find(a => a.medicoNombre === medico)?.especialidad}</p>
+                            </div>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100">{medicoAppointments.length} citas</Badge>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                          <div>
-                            <p className="text-xl">{completed}</p>
-                            <p className="text-xs text-gray-500">Completadas</p>
-                          </div>
-                          <div>
-                            <p className="text-xl">{medicoAppointments.filter(a => a.estado === 'activa').length}</p>
-                            <p className="text-xs text-gray-500">Activas</p>
-                          </div>
-                          <div>
-                            <p className="text-xl">{completionRate}%</p>
-                            <p className="text-xs text-gray-500">Efectividad</p>
-                          </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                            <div className="bg-gray-50 p-2 rounded">
+                                <span className="block font-bold text-gray-900">{completed}</span>
+                                <span className="text-xs text-gray-500">Ok</span>
+                            </div>
+                             <div className="bg-gray-50 p-2 rounded">
+                                <span className="block font-bold text-gray-900">{medicoAppointments.filter(a => a.estado === 'activa').length}</span>
+                                <span className="text-xs text-gray-500">Activas</span>
+                            </div>
+                             <div className="bg-gray-50 p-2 rounded">
+                                <span className="block font-bold text-gray-900">{rate}%</span>
+                                <span className="text-xs text-gray-500">Efic.</span>
+                            </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                    </div>
                   );
-                })}
+                 })}
               </div>
             </TabsContent>
 
-            <TabsContent value="pacientes" className="space-y-4 pt-4">
-              <div className="grid grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">{new Set(appointments.map(a => a.pacienteId)).size}</p>
-                    <p className="text-sm text-gray-500 mt-1">Pacientes Únicos</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">
-                      {(appointments.length / new Set(appointments.map(a => a.pacienteId)).size).toFixed(1)}
+            {/* --- TAB: PACIENTES --- */}
+            <TabsContent value="pacientes" className="pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-100">
+                    <p className="text-2xl font-bold text-blue-700">{uniquePatients}</p>
+                    <p className="text-xs text-blue-600">Pacientes Únicos</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg text-center border border-green-100">
+                    <p className="text-2xl font-bold text-green-700">
+                         {uniquePatients > 0 ? (totalAppointments / uniquePatients).toFixed(1) : "0"}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">Promedio Citas/Paciente</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">24</p>
-                    <p className="text-sm text-gray-500 mt-1">Nuevos Este Mes</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Pacientes Más Frecuentes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {[...new Set(appointments.map(a => a.pacienteNombre))]
-                      .map(nombre => ({
-                        nombre,
-                        count: appointments.filter(a => a.pacienteNombre === nombre).length
-                      }))
-                      .sort((a, b) => b.count - a.count)
-                      .slice(0, 5)
-                      .map(({ nombre, count }) => (
-                        <div key={nombre} className="flex items-center justify-between p-3 border rounded-lg">
-                          <span className="text-sm">{nombre}</span>
-                          <Badge variant="secondary">{count} citas</Badge>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="financiero" className="space-y-4 pt-4">
-              <div className="grid grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">€12,450</p>
-                    <p className="text-sm text-gray-500 mt-1">Ingresos Este Mes</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">€145,200</p>
-                    <p className="text-sm text-gray-500 mt-1">Ingresos Este Año</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl">€85</p>
-                    <p className="text-sm text-gray-500 mt-1">Precio Promedio</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <p className="text-2xl text-green-600">+15%</p>
-                    <p className="text-sm text-gray-500 mt-1">vs Mes Anterior</p>
-                  </CardContent>
-                </Card>
+                    <p className="text-xs text-green-600">Citas por Paciente</p>
+                </div>
+                 <div className="bg-purple-50 p-4 rounded-lg text-center border border-purple-100">
+                    <p className="text-2xl font-bold text-purple-700">24</p>
+                    <p className="text-xs text-purple-600">Nuevos (Demo)</p>
+                </div>
               </div>
             </TabsContent>
+
+            {/* --- TAB: FINANCIERO (Demo estático) --- */}
+            <TabsContent value="financiero" className="pt-2">
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 border rounded-lg text-center">
+                        <p className="text-xl font-bold text-gray-800">€12,450</p>
+                        <p className="text-xs text-gray-500">Este Mes</p>
+                    </div>
+                    <div className="p-4 border rounded-lg text-center">
+                        <p className="text-xl font-bold text-gray-800">€145k</p>
+                        <p className="text-xs text-gray-500">Anual</p>
+                    </div>
+                    <div className="p-4 border rounded-lg text-center">
+                        <p className="text-xl font-bold text-gray-800">€85</p>
+                        <p className="text-xs text-gray-500">Ticket Medio</p>
+                    </div>
+                    <div className="p-4 border rounded-lg text-center bg-green-50 border-green-100">
+                        <p className="text-xl font-bold text-green-600">+15%</p>
+                        <p className="text-xs text-green-600">Crecimiento</p>
+                    </div>
+                 </div>
+            </TabsContent>
+
           </Tabs>
         </CardContent>
       </Card>
