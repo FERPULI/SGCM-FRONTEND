@@ -5,7 +5,7 @@ import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { 
   Eye, Trash2, Search, Plus, Calendar as CalendarIcon, 
-  Loader2, User, Pencil, Filter as FilterIcon, SlidersHorizontal
+  Loader2, User, Pencil, Filter as FilterIcon, SlidersHorizontal, Clock, FileText
 } from "lucide-react";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription 
@@ -40,6 +40,8 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
   const [newTime, setNewTime] = useState("");
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [cancelCita, setCancelCita] = useState<Appointment | null>(null);
 
   // --- CARGA ---
   const loadAppointments = async () => {
@@ -91,18 +93,9 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
   const totalPages = Math.ceil(filteredAppointments.length / rowsPerPage);
 
   // --- ACCIONES ---
-  const handleCancel = async (id: number) => {
-    if (!confirm("¿Estás seguro de que deseas cancelar esta cita?")) return;
-    try {
-      setActionLoadingId(id);
-      await appointmentsService.cancelAppointment(id);
-      toast.success("Cita cancelada");
-      loadAppointments(); 
-    } catch (error) {
-      toast.error("No se pudo cancelar");
-    } finally {
-      setActionLoadingId(null);
-    }
+  const handleCancel = (cita: Appointment) => {
+    setCancelCita(cita);
+    setIsCancelOpen(true);
   };
 
   const handleOpenReschedule = (cita: Appointment) => {
@@ -131,16 +124,76 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
   }, [newDate, isRescheduleOpen, rescheduleCita]);
 
   const submitReschedule = async () => {
-    if (!rescheduleCita || !newDate || !newTime) return;
+    if (!rescheduleCita || !newDate || !newTime) {
+      toast.error("Por favor selecciona fecha y hora");
+      return;
+    }
+    
     try {
       setActionLoadingId(rescheduleCita.id);
-      await appointmentsService.rescheduleAppointment(rescheduleCita.id, newDate, newTime);
-      toast.success("Cita reprogramada");
+      
+      console.log('Enviando reprogramación:', { 
+        citaId: rescheduleCita.id, 
+        fechaActual: rescheduleCita.fecha_hora_inicio,
+        nuevaFecha: newDate, 
+        nuevaHora: newTime 
+      });
+      
+      const citaActualizada = await appointmentsService.rescheduleAppointment(
+        rescheduleCita.id, 
+        newDate, 
+        newTime
+      );
+      
+      console.log('Cita actualizada recibida:', citaActualizada);
+      console.log('Nueva fecha_hora_inicio:', citaActualizada.fecha_hora_inicio);
+      
+      // Cerrar modal y limpiar estados PRIMERO
       setIsRescheduleOpen(false);
-      loadAppointments();
+      setRescheduleCita(null);
+      setNewDate("");
+      setNewTime("");
+      setAvailableSlots([]);
+      setActionLoadingId(null);
+      
+      // Mostrar mensaje de éxito
+      toast.success("✓ Cita reprogramada exitosamente");
+      
+      // Recargar completamente la lista desde el servidor
+      await loadAppointments();
+      
+      console.log('Lista de citas recargada desde el servidor');
+      
     } catch (err: any) {
-      toast.error("Error al reprogramar");
-    } finally {
+      console.error("Error completo al reprogramar:", err);
+      toast.error(err.response?.data?.message || "✗ Error al reprogramar la cita");
+      setActionLoadingId(null);
+    }
+  };
+
+  // --- CANCELAR CITA ---
+  const submitCancelAppointment = async () => {
+    if (!cancelCita) return;
+    
+    try {
+      setActionLoadingId(cancelCita.id);
+      
+      await appointmentsService.cancelAppointment(cancelCita.id);
+      
+      // Cerrar modal y limpiar estados
+      setIsCancelOpen(false);
+      setCancelCita(null);
+      setActionLoadingId(null);
+      
+      // Mostrar mensaje de éxito
+      toast.success("✓ Cita cancelada exitosamente");
+      
+      // Recargar la lista desde el servidor
+      await loadAppointments();
+      
+    } catch (err: any) {
+      console.error("Error al cancelar la cita:", err);
+      toast.error(err.response?.data?.message || "✗ Error al cancelar la cita");
       setActionLoadingId(null);
     }
   };
@@ -152,14 +205,26 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
     const date = new Date(safeString);
     return isNaN(date.getTime()) ? null : date;
   };
+  
   const formatDate = (dateString: string) => {
-    const date = parseDateSafe(dateString);
-    return date ? date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+    if (!dateString) return '-';
+    // Extraer solo la parte de fecha sin conversión de zona horaria
+    const dateOnly = dateString.split('T')[0];
+    const [year, month, day] = dateOnly.split('-');
+    return `${day}/${month}/${year}`;
   };
+  
   const formatTime = (dateString: string) => {
-    const date = parseDateSafe(dateString);
-    return date ? date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-';
+    if (!dateString) return '-';
+    // Extraer la hora directamente del string sin conversión
+    const timePart = dateString.includes('T') ? dateString.split('T')[1] : dateString.split(' ')[1];
+    if (!timePart) return '-';
+    
+    // Extraer HH:MM de "HH:MM:SS" o "HH:MM:SS.000000Z"
+    const [hours, minutes] = timePart.split(':');
+    return `${hours}:${minutes}`;
   };
+  
   const getDoctorName = (medico: any) => {
     if (!medico) return "Médico Asignado";
     const nombre = medico.nombre_completo || medico.nombre; 
@@ -337,15 +402,11 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
-                                  onClick={() => handleCancel(cita.id)}
+                                  onClick={() => handleCancel(cita)}
                                   disabled={actionLoadingId === cita.id}
                                   className="h-8 px-3 text-gray-600 hover:text-red-600 hover:bg-red-50"
                                 >
-                                  {actionLoadingId === cita.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    'Cancelar'
-                                  )}
+                                  Cancelar
                                 </Button>
                               </>
                             )}
@@ -364,49 +425,95 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
 
       {/* Modal Ver Detalles */}
       <Dialog open={!!viewAppointment} onOpenChange={(open) => !open && setViewAppointment(null)}>
-        <DialogContent className="sm:max-w-md rounded-xl border-0 shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Detalles de la Cita</DialogTitle>
-            <DialogDescription>Información completa del registro seleccionado.</DialogDescription>
+        <DialogContent className="max-w-[1472px] w-[calc(100%-2rem)] rounded-lg shadow-2xl p-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-200 shrink-0">
+            <DialogTitle className="text-base font-bold text-gray-900">Detalles de la Cita</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Información completa de la cita médica
+            </DialogDescription>
           </DialogHeader>
           {viewAppointment && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-500 font-medium">Fecha</p>
-                  <p className="font-semibold text-gray-900">{formatDate(viewAppointment.fecha_hora_inicio)}</p>
+            <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
+              {/* Información de la Cita */}
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                <h3 className="text-xs font-bold text-blue-900 mb-2">Información de la Cita</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-start gap-2">
+                    <CalendarIcon className="h-4 w-4 text-blue-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-[10px] text-gray-600">Fecha</p>
+                      <p className="text-xs font-bold text-gray-900">{formatDate(viewAppointment.fecha_hora_inicio)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-[10px] text-gray-600">Hora</p>
+                      <p className="text-xs font-bold text-gray-900">{formatTime(viewAppointment.fecha_hora_inicio)}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-500 font-medium">Hora</p>
-                  <p className="font-semibold text-gray-900">{formatTime(viewAppointment.fecha_hora_inicio)}</p>
-                </div>
-              </div>
-              
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <p className="text-xs text-blue-600 font-medium mb-1">Médico Tratante</p>
-                <p className="font-bold text-blue-900">{getDoctorName(viewAppointment.medico)}</p>
-                <p className="text-sm text-blue-700 mt-1">
-                  {viewAppointment.especialidad || viewAppointment.medico?.especialidad?.nombre || "General"}
-                </p>
               </div>
 
+              {/* Información del Paciente */}
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <h3 className="text-xs font-bold text-gray-900 mb-2">Información del Paciente</h3>
+                <div className="flex items-start gap-2">
+                  <User className="h-4 w-4 text-gray-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-[10px] text-gray-600">Nombre</p>
+                    <p className="text-xs font-semibold text-gray-900">
+                      {(viewAppointment as any).paciente?.nombre_completo || "Paciente"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Médico */}
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <h3 className="text-xs font-bold text-gray-900 mb-2">Información del Médico</h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <User className="h-4 w-4 text-gray-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-[10px] text-gray-600">Nombre</p>
+                      <p className="text-xs font-semibold text-gray-900">{getDoctorName(viewAppointment.medico)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-gray-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-[10px] text-gray-600">Especialidad</p>
+                      <p className="text-xs font-semibold text-blue-600">
+                        {viewAppointment.especialidad || viewAppointment.medico?.especialidad?.nombre || "General"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Motivo de la Consulta */}
               {viewAppointment.motivo_consulta && (
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-500 font-medium">Motivo de Consulta</p>
-                  <p className="text-gray-700 leading-relaxed">"{viewAppointment.motivo_consulta}"</p>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <h3 className="text-xs font-bold text-gray-900 mb-1">Motivo de la Consulta</h3>
+                  <p className="text-xs text-gray-700">{viewAppointment.motivo_consulta}</p>
                 </div>
               )}
 
-              <div className="space-y-1">
-                <p className="text-xs text-gray-500 font-medium">Estado</p>
-                <Badge className={`${getStatusBadgeClass(viewAppointment.estado)} hover:${getStatusBadgeClass(viewAppointment.estado)}`}>
+              {/* Estado */}
+              <div className="flex items-center justify-between pt-1 pb-2">
+                <span className="text-xs font-medium text-gray-700">Estado de la cita:</span>
+                <Badge className={`${getStatusBadgeClass(viewAppointment.estado)} text-xs px-3 py-1 capitalize`}>
                   {viewAppointment.estado}
                 </Badge>
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={() => setViewAppointment(null)} className="w-full rounded-lg">
+          <DialogFooter className="px-6 pb-5 pt-3 border-t border-gray-200 shrink-0">
+            <Button 
+              onClick={() => setViewAppointment(null)} 
+              className="w-full rounded-lg h-10 bg-black hover:bg-gray-800 text-sm font-bold"
+            >
               Cerrar
             </Button>
           </DialogFooter>
@@ -415,39 +522,42 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
 
       {/* Modal Reprogramar */}
       <Dialog open={isRescheduleOpen} onOpenChange={setIsRescheduleOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border-0 shadow-xl">
-          <DialogHeader>
-            <DialogTitle>Reprogramar Cita</DialogTitle>
-            <DialogDescription>Selecciona una nueva fecha y hora para tu cita.</DialogDescription>
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)] rounded-xl shadow-xl p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="text-lg font-bold text-gray-900">Reprogramar Cita</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Selecciona una nueva fecha y hora para tu cita.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Nueva Fecha</label>
+          <div className="px-6 pb-4 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wide">Nueva Fecha</label>
               <Input 
                 type="date" 
                 min={new Date().toISOString().split('T')[0]} 
                 value={newDate} 
                 onChange={(e) => setNewDate(e.target.value)} 
-                className="rounded-lg h-11" 
+                className="rounded-lg h-10 text-sm border-gray-300" 
               />
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Nuevo Horario</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wide">Nuevo Horario</label>
               {loadingSlots ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  <Loader2 className="h-4 w-4 animate-spin"/> Buscando disponibilidad...
+                <div className="flex items-center gap-2 text-xs text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600"/> 
+                  <span className="font-medium">Buscando disponibilidad...</span>
                 </div>
               ) : availableSlots.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-1">
+                <div className="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200">
                   {availableSlots.map(slot => (
                     <button 
                       key={slot} 
                       onClick={() => setNewTime(slot)} 
-                      className={`px-2 py-2.5 text-xs rounded-lg border transition-all font-medium ${
+                      className={`px-2 py-2 text-xs rounded-md border transition-all font-bold ${
                         newTime === slot 
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                          : 'bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600 hover:shadow-sm'
                       }`}
                     >
                       {slot}
@@ -455,26 +565,112 @@ export function PatientAppointments({ onNavigate }: PatientAppointmentsProps) {
                   ))}
                 </div>
               ) : (
-                <div className="p-4 bg-gray-50 rounded-lg text-center text-xs text-gray-500 italic border border-dashed">
-                  Selecciona una fecha para ver horarios.
+                <div className="p-4 bg-gray-50 rounded-lg text-center text-xs text-gray-500 italic border border-dashed border-gray-300">
+                  📅 Selecciona una fecha para ver horarios disponibles.
                 </div>
               )}
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="px-6 pb-6 pt-2 flex gap-2">
             <Button 
               variant="outline" 
               onClick={() => setIsRescheduleOpen(false)} 
-              className="rounded-lg"
+              className="flex-1 rounded-lg h-9 text-sm border-gray-300"
             >
               Cancelar
             </Button>
             <Button 
               onClick={submitReschedule} 
-              disabled={!newDate || !newTime} 
-              className="bg-blue-600 hover:bg-blue-700 rounded-lg"
+              disabled={!newDate || !newTime || !!actionLoadingId} 
+              className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg h-9 text-sm font-semibold"
             >
-              Confirmar Cambio
+              {actionLoadingId ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2"/> Guardando...</>
+              ) : (
+                '✓ Confirmar Cambio'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Cancelar Cita */}
+      <Dialog open={isCancelOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsCancelOpen(false);
+          setCancelCita(null);
+        }
+      }}>
+        <DialogContent className="max-w-md rounded-lg shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-gray-900">Cancelar Cita</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500 mt-2">
+              ¿Estás seguro de que deseas cancelar esta cita?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {cancelCita && (
+            <div className="py-4 space-y-3">
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <div className="flex items-start gap-2">
+                  <User className="h-4 w-4 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">Médico</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {getDoctorName(cancelCita.medico)}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2">
+                  <CalendarIcon className="h-4 w-4 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">Fecha y Hora</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatDate(cancelCita.fecha_hora_inicio)} - {formatTime(cancelCita.fecha_hora_inicio)}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">Motivo</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {cancelCita.motivo_consulta || 'Consulta general'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-sm text-red-600 font-medium">
+                Esta acción cambiará el estado de la cita a "Cancelada".
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsCancelOpen(false);
+                setCancelCita(null);
+              }}
+              disabled={!!actionLoadingId}
+              className="flex-1 rounded-lg h-9 text-sm border-gray-300"
+            >
+              No, mantener cita
+            </Button>
+            <Button 
+              onClick={submitCancelAppointment}
+              disabled={!!actionLoadingId}
+              className="flex-1 bg-red-600 hover:bg-red-700 rounded-lg h-9 text-sm font-semibold"
+            >
+              {actionLoadingId === cancelCita?.id ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2"/> Cancelando...</>
+              ) : (
+                'Sí, cancelar cita'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
