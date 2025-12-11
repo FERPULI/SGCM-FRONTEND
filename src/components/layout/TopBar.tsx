@@ -59,6 +59,9 @@ export function TopBar({ user: propUser, onLogout, onNavigate, onSidebarOpen }: 
   // Iniciales (Primera letra del nombre + Primera del apellido)
   const initials = (rawName.charAt(0) + (rawLastName ? rawLastName.charAt(0) : '')).toUpperCase();
 
+  // Verificar si es paciente para mostrar botón "Reservar Cita"
+  const isPatient = roleName.includes('paciente') || roleName.includes('patient');
+
   return (
     <header className="h-16 bg-white border-b border-gray-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
       
@@ -74,7 +77,7 @@ export function TopBar({ user: propUser, onLogout, onNavigate, onSidebarOpen }: 
       </div>
 
       {/* DERECHA */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex items-center gap-3">
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
