@@ -161,9 +161,16 @@ export const appointmentsService = {
       fecha_hora_inicio: `${date} ${time}:00`
     };
 
+  /**
+   * Cancelar cita
+   */
+  cancelAppointment: async (id: number, reason?: string): Promise<Appointment> => {
     const response = await http.put<ApiResponse<Appointment>>(
       API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      payload
+      { 
+        estado: 'cancelada',
+        cancellation_reason: reason 
+      }
     );
 
     if (!response.data?.data) throw new Error("Error en respuesta al reprogramar.");
@@ -171,7 +178,68 @@ export const appointmentsService = {
   },
 
   /**
-   * Obtener horarios disponibles
+   * Confirmar cita
+   */
+  confirmAppointment: async (id: number): Promise<Appointment> => {
+    const response = await http.post<ApiResponse<Appointment>>(
+      API_ENDPOINTS.APPOINTMENTS.CONFIRM(id)
+    );
+    return response.data?.data!;
+  },
+
+  /**
+   * Completar cita
+   */
+  completeAppointment: async (id: number, notes?: string): Promise<Appointment> => {
+    const response = await http.post<ApiResponse<Appointment>>(
+      API_ENDPOINTS.APPOINTMENTS.COMPLETE(id),
+      { completion_notes: notes }
+    );
+    return response.data?.data!;
+  },
+
+  /**
+   * Reprogramar cita
+   */
+  rescheduleAppointment: async (id: number, newDate: string, newTime: string): Promise<Appointment> => {
+    // Asegurarnos de que el formato de hora sea correcto (HH:MM)
+    // Los slots vienen como "15:30", así que solo necesitamos agregar ":00" si no lo tiene
+    let formattedTime = newTime.trim();
+    
+    // Si el formato es "HH:MM", agregar ":00"
+    if (formattedTime.match(/^\d{2}:\d{2}$/)) {
+      formattedTime = `${formattedTime}:00`;
+    }
+    
+    const payload = {
+      fecha_hora_inicio: `${newDate} ${formattedTime}`
+    };
+    
+    console.log('Reprogramando cita:', { 
+      id, 
+      newDate, 
+      newTime, 
+      formattedTime,
+      fullDateTime: payload.fecha_hora_inicio 
+    });
+    
+    const response = await http.put<ApiResponse<Appointment>>(
+      API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
+      payload
+    );
+    
+    console.log('Respuesta completa de reprogramación:', response);
+    
+    if (!response.data?.data) {
+      throw new Error("La API no devolvió la cita reprogramada.");
+    }
+    
+    return response.data.data;
+  },
+
+  /**
+   * (MODIFICADO) Obtener horarios disponibles
+   * Devuelve un array de strings ['09:00', '09:30']
    */
   getAvailableSlots: async (medicoId: number, date: string): Promise<string[]> => {
     try {
