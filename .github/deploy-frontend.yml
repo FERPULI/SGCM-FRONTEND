@@ -1,0 +1,39 @@
+name: Desplegar Frontend React ⚛️
+
+on:
+  push:
+    branches:
+      - main
+      - rama-fernandez # Tu rama de trabajo
+
+jobs:
+  build-and-deploy:
+    name: 🏗️ Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🚚 Obtener código
+      uses: actions/checkout@v4
+
+    - name: 🟢 Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # Versión estable actual
+
+    - name: 📦 Instalar dependencias
+      run: npm install
+
+    - name: 🔨 Construir proyecto (Build)
+      run: npm run build
+      # Esto creará una carpeta 'dist' (o 'build') con tus archivos listos.
+
+    - name: 📂 Subir a HostinPeru (FTP)
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        # ⚠️ IMPORTANTE: Aquí le decimos que suba SÓLO la carpeta construida
+        # ...
+        # Para Vite la carpeta SIEMPRE es ./dist/
+        local-dir: ./dist/ 
+        server-dir: ./
