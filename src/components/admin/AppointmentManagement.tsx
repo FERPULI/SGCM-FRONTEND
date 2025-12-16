@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -29,34 +29,65 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { StatusBadge } from "../shared/StatusBadge";
 import { Appointment, AppointmentStatus } from "../../types";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "../ui/calendar";
 import { Textarea } from "../ui/textarea";
+import { Badge } from "../ui/badge";
+import { appointmentsService } from "../../services/appointments.service";
+import { toast } from "sonner";
+
+// --- Helpers de Fecha ---
+// Evita problemas de zona horaria al convertir a string para la API
+const formatDateToLocalISO = (date: Date) => {
+  const offset = date.getTimezoneOffset();
+  const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+  return adjustedDate.toISOString().split('T')[0];
+};
+
+const formatDateDisplay = (dateString: string) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return isNaN(date.getTime()) 
+    ? dateString 
+    : date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatTimeDisplay = (dateString: string) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return isNaN(date.getTime()) 
+    ? "" 
+    : date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'programada': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'confirmada': return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'completada': return 'bg-green-100 text-green-700 border-green-200';
+    case 'cancelada': return 'bg-red-100 text-red-700 border-red-200';
+    default: return 'bg-gray-100 text-gray-600';
+  }
+};
 
 // Modificamos la interface para que sea opcional y evitar crasheos si no se pasan datos
 interface AppointmentManagementProps {
-  appointments?: Appointment[];
+  appointments: Appointment[];
 }
 
-// Definimos un array vacío por defecto en los props: { appointments = [] }
-export function AppointmentManagement({ appointments = [] }: AppointmentManagementProps) {
+export function AppointmentManagement({ appointments }: AppointmentManagementProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<AppointmentStatus | "todas">("todas");
+  
+  // Estados del Modal
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
-  // Aseguramos que safeAppointments sea siempre un array
-  const safeAppointments = Array.isArray(appointments) ? appointments : [];
-
-  const filteredAppointments = safeAppointments.filter(appointment => {
-    // Protegemos contra valores nulos en los nombres
-    const pNombre = appointment.pacienteNombre || "";
-    const mNombre = appointment.medicoNombre || "";
-
+  const filteredAppointments = appointments.filter(appointment => {
     const matchesSearch = 
-      pNombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mNombre.toLowerCase().includes(searchTerm.toLowerCase());
+      appointment.pacienteNombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.medicoNombre.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesTab = activeTab === "todas" || appointment.estado === activeTab;
     
@@ -64,25 +95,21 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
   });
 
   const formatDate = (date: string) => {
-    try {
-      return new Date(date).toLocaleDateString('es-ES', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    } catch (e) {
-      return date; // Retorna el string original si falla el formateo
-    }
+    return new Date(date).toLocaleDateString('es-ES', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
   };
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl">Gestión de Citas</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Gestión de Citas</h1>
           <p className="text-gray-500 mt-1">Administra todas las citas del sistema</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleCreateClick} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="h-4 w-4 mr-2" />
           Nueva Cita
         </Button>
@@ -93,7 +120,7 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{safeAppointments.length}</p>
+              <p className="text-2xl">{appointments.length}</p>
               <p className="text-sm text-gray-500">Total</p>
             </div>
           </CardContent>
@@ -101,7 +128,7 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'activa').length}</p>
+              <p className="text-2xl">{appointments.filter(a => a.estado === 'activa').length}</p>
               <p className="text-sm text-gray-500">Activas</p>
             </div>
           </CardContent>
@@ -109,7 +136,7 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'pendiente').length}</p>
+              <p className="text-2xl">{appointments.filter(a => a.estado === 'pendiente').length}</p>
               <p className="text-sm text-gray-500">Pendientes</p>
             </div>
           </CardContent>
@@ -117,7 +144,7 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'completada').length}</p>
+              <p className="text-2xl">{appointments.filter(a => a.estado === 'completada').length}</p>
               <p className="text-sm text-gray-500">Completadas</p>
             </div>
           </CardContent>
@@ -125,13 +152,14 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-2xl">{safeAppointments.filter(a => a.estado === 'cancelada').length}</p>
+              <p className="text-2xl">{appointments.filter(a => a.estado === 'cancelada').length}</p>
               <p className="text-sm text-gray-500">Canceladas</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Tabla y Filtros */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -139,7 +167,7 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Buscar citas..."
+                placeholder="Buscar por nombre..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -149,10 +177,10 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 h-auto">
               <TabsTrigger value="todas">Todas</TabsTrigger>
-              <TabsTrigger value="activa">Activas</TabsTrigger>
-              <TabsTrigger value="pendiente">Pendientes</TabsTrigger>
+              <TabsTrigger value="programada">Programadas</TabsTrigger>
+              <TabsTrigger value="confirmada">Confirmadas</TabsTrigger>
               <TabsTrigger value="completada">Completadas</TabsTrigger>
               <TabsTrigger value="cancelada">Canceladas</TabsTrigger>
             </TabsList>
@@ -164,7 +192,6 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
                     <TableRow>
                       <TableHead>Paciente</TableHead>
                       <TableHead>Médico</TableHead>
-                      <TableHead>Especialidad</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Hora</TableHead>
                       <TableHead>Estado</TableHead>
@@ -174,31 +201,28 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
                   <TableBody>
                     {filteredAppointments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                           No se encontraron citas
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredAppointments.map((appointment) => (
                         <TableRow key={appointment.id}>
-                          <TableCell>{appointment.pacienteNombre}</TableCell>
-                          <TableCell>{appointment.medicoNombre}</TableCell>
-                          <TableCell>{appointment.especialidad}</TableCell>
-                          <TableCell>{formatDate(appointment.fecha)}</TableCell>
-                          <TableCell>{appointment.hora}</TableCell>
+                          <TableCell className="font-medium">{appointment.paciente?.nombre_completo || "Sin nombre"}</TableCell>
+                          <TableCell>{appointment.medico?.nombre_completo || "Sin asignar"}</TableCell>
+                          <TableCell>{formatDateDisplay(appointment.fecha_hora_inicio)}</TableCell>
+                          <TableCell>{formatTimeDisplay(appointment.fecha_hora_inicio)}</TableCell>
                           <TableCell>
-                            <StatusBadge status={appointment.estado} />
+                            <Badge variant="outline" className={`capitalize border-0 px-2 py-1 ${getStatusColor(appointment.estado)}`}>
+                                {appointment.estado}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => setEditingAppointment(appointment)}
-                              >
+                              <Button variant="ghost" size="sm" onClick={() => handleEditClick(appointment)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-red-600">
+                              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleDelete(appointment.id)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -214,112 +238,114 @@ export function AppointmentManagement({ appointments = [] }: AppointmentManageme
         </CardContent>
       </Card>
 
-      {/* Add/Edit Appointment Dialog */}
-      <Dialog open={showAddDialog || editingAppointment !== null} onOpenChange={(open) => {
-        if (!open) {
-          setShowAddDialog(false);
-          setEditingAppointment(null);
-        }
-      }}>
+      {/* MODAL DE AGREGAR/EDITAR */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingAppointment ? 'Editar Cita' : 'Nueva Cita'}
-            </DialogTitle>
+            <DialogTitle>{editingAppointment ? 'Editar Cita' : 'Nueva Cita'}</DialogTitle>
             <DialogDescription>
-              {editingAppointment 
-                ? 'Modifica la información de la cita' 
-                : 'Completa el formulario para crear una nueva cita'
-              }
+              {editingAppointment ? 'Modifica la información de la cita existente.' : 'Agenda una nueva cita médica.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+            
+            {/* Selector Paciente */}
             <div className="space-y-2">
               <Label htmlFor="paciente">Paciente</Label>
-              <Select defaultValue={editingAppointment?.pacienteId?.toString()}>
+              <Select defaultValue={editingAppointment?.pacienteId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un paciente" />
+                  <SelectValue placeholder={isLoadingLists ? "Cargando..." : "Seleccionar paciente"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">María González</SelectItem>
-                  <SelectItem value="2">Juan Pérez</SelectItem>
+                  {patientsList.map(p => (
+                      <SelectItem key={p.id} value={p.id.toString()}>{p.nombre_completo}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Selector Médico */}
             <div className="space-y-2">
               <Label htmlFor="medico">Médico</Label>
-              <Select defaultValue={editingAppointment?.medicoId?.toString()}>
+              <Select defaultValue={editingAppointment?.medicoId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un médico" />
+                  <SelectValue placeholder={isLoadingLists ? "Cargando..." : "Seleccionar médico"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="2">Dr. Carlos Ramírez</SelectItem>
-                  <SelectItem value="3">Dra. Ana Martínez</SelectItem>
+                   {doctorsList.map(d => (
+                      <SelectItem key={d.id_medico} value={d.id_medico.toString()}>{d.nombre_completo}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Fecha */}
             <div className="space-y-2">
               <Label>Fecha</Label>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                className="rounded-md border"
-              />
+              <div className="border rounded-md p-2 flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  initialFocus
+                  className="rounded-md border shadow-none"
+                />
+              </div>
             </div>
+
+            {/* Hora y Estado/Motivo */}
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="hora">Hora</Label>
-                <Select defaultValue={editingAppointment?.hora}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una hora" />
-                  </SelectTrigger>
+                <Select 
+                    value={formData.hora} 
+                    onValueChange={(val) => setFormData({...formData, hora: val})}
+                >
+                  <SelectTrigger><SelectValue placeholder="Seleccionar hora" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="09:00">09:00</SelectItem>
-                    <SelectItem value="10:00">10:00</SelectItem>
-                    <SelectItem value="11:00">11:00</SelectItem>
-                    <SelectItem value="15:00">15:00</SelectItem>
-                    <SelectItem value="16:00">16:00</SelectItem>
+                    {/* Lista estática de horas, puedes hacerla dinámica con getAvailableSlots */}
+                    {["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "15:00", "15:30", "16:00", "16:30", "17:00"].map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="estado">Estado</Label>
-                <Select defaultValue={editingAppointment?.estado || 'pendiente'}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
+                <Select 
+                    value={formData.estado} 
+                    onValueChange={(val) => setFormData({...formData, estado: val})}
+                >
+                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pendiente">Pendiente</SelectItem>
-                    <SelectItem value="activa">Activa</SelectItem>
+                    <SelectItem value="programada">Programada</SelectItem>
+                    <SelectItem value="confirmada">Confirmada</SelectItem>
                     <SelectItem value="completada">Completada</SelectItem>
                     <SelectItem value="cancelada">Cancelada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="motivo">Motivo de la consulta</Label>
-              <Textarea
-                id="motivo"
-                placeholder="Describe el motivo de la consulta..."
-                defaultValue={editingAppointment?.motivo}
-                rows={3}
-              />
+
+              <div className="space-y-2">
+                <Label htmlFor="motivo">Motivo</Label>
+                <Textarea
+                  id="motivo"
+                  placeholder="Describe el motivo de la consulta..."
+                  value={formData.motivo}
+                  onChange={(e) => setFormData({...formData, motivo: e.target.value})}
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowAddDialog(false);
-                setEditingAppointment(null);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              {editingAppointment ? 'Guardar Cambios' : 'Crear Cita'}
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingAppointment ? 'Guardar Cambios' : 'Agendar Cita'}
             </Button>
           </DialogFooter>
         </DialogContent>
