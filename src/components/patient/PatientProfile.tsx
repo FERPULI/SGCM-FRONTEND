@@ -31,13 +31,36 @@ export function PatientProfile({ user }: PatientProfileProps) {
           toast.error("No se encontró el ID del paciente");
           return;
         }
-        const dataToUpdate = {
+
+        // Validar contraseñas si se están cambiando
+        if (passwordData.newPassword || passwordData.confirmPassword) {
+          if (passwordData.newPassword !== passwordData.confirmPassword) {
+            toast.error("Las contraseñas no coinciden");
+            setIsLoading(false);
+            return;
+          }
+          if (passwordData.newPassword.length < 6) {
+            toast.error("La contraseña debe tener al menos 6 caracteres");
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        const dataToUpdate: any = {
           nombre: formData.nombre,
           telefono: formData.telefono,
           fecha_nacimiento: formData.fecha_nacimiento,
           direccion: formData.direccion,
           tipo_sangre: formData.tipo_sangre,
         };
+
+        // Agregar contraseña si se está cambiando
+        if (passwordData.newPassword && passwordData.newPassword === passwordData.confirmPassword) {
+          dataToUpdate.password = passwordData.newPassword;
+          dataToUpdate.password_confirmation = passwordData.confirmPassword;
+        }
+
+        console.log("Datos a enviar:", dataToUpdate); // Debug
         await patientService.updateProfile(pacienteId, dataToUpdate);
         const updatedUser = {
           ...parsedUser,
@@ -52,6 +75,10 @@ export function PatientProfile({ user }: PatientProfileProps) {
           }
         };
         localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        
+        // Limpiar campos de contraseña
+        setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        
         toast.success("✓ Perfil actualizado exitosamente");
         setIsEditing(false);
       } catch (error: any) {
@@ -70,6 +97,11 @@ export function PatientProfile({ user }: PatientProfileProps) {
     fecha_nacimiento: "",
     direccion: "",
     tipo_sangre: "",
+  });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   useEffect(() => {
@@ -285,14 +317,21 @@ export function PatientProfile({ user }: PatientProfileProps) {
                       id="currentPassword"
                       type="password"
                       placeholder="••••••••"
+                      value="••••••••"
+                      disabled={true}
+                      className="bg-gray-100 cursor-not-allowed"
                     />
+                    <p className="text-xs text-gray-500">La contraseña actual no se puede modificar desde aquí</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword">Nueva Contraseña</Label>
                     <Input
                       id="newPassword"
                       type="password"
-                      placeholder="••••••••"
+                      placeholder="Ingresa nueva contraseña"
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      disabled={!isEditing}
                     />
                   </div>
                   <div className="space-y-2">
@@ -300,12 +339,19 @@ export function PatientProfile({ user }: PatientProfileProps) {
                     <Input
                       id="confirmPassword"
                       type="password"
-                      placeholder="••••••••"
+                      placeholder="Confirma la nueva contraseña"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      disabled={!isEditing}
                     />
                   </div>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    Actualizar Contraseña
-                  </Button>
+                  {passwordData.newPassword && passwordData.confirmPassword && 
+                   passwordData.newPassword !== passwordData.confirmPassword && (
+                    <p className="text-sm text-red-600">Las contraseñas no coinciden</p>
+                  )}
+                  {passwordData.newPassword && passwordData.newPassword === passwordData.confirmPassword && (
+                    <p className="text-sm text-green-600">✓ Las contraseñas coinciden</p>
+                  )}
                 </div>
               </TabsContent>
 

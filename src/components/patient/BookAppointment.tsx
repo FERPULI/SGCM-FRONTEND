@@ -164,56 +164,68 @@ export function BookAppointment({ onNavigate, user }: BookAppointmentProps) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gray-50 p-6 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* --- HEADER CON BOTÓN ATRÁS (Solicitado) --- */}
-        <div className="flex items-center gap-6">
+        {/* HEADER */}
+        <div className="flex items-center gap-4">
           <Button 
             variant="outline" 
             size="icon" 
             onClick={handleBack} 
-            className="rounded-full h-12 w-12 border-gray-200 bg-white hover:bg-gray-100 hover:text-blue-600 shadow-sm transition-all"
-            title="Volver atrás"
+            className="rounded-lg h-10 w-10 border border-gray-300 bg-white hover:bg-gray-100"
           >
-            <ArrowLeft className="h-6 w-6" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Nueva Cita</h1>
-            <p className="text-gray-500 mt-1">Agenda tu consulta en 3 simples pasos.</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Nueva Cita</h1>
+            <p className="text-gray-500 text-sm">Agenda tu consulta en 3 pasos</p>
           </div>
         </div>
 
-        {/* --- STEPPER --- */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center relative overflow-hidden">
-          <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -z-0" />
-          {[
-            { id: 1, label: "Especialidad" },
-            { id: 2, label: "Médico" },
-            { id: 3, label: "Resumen" }
-          ].map(step => (
-            <div key={step.id} className="relative z-10 flex flex-col items-center flex-1 cursor-default">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${currentStep >= step.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-200 text-gray-500'}`}>{step.id}</div>
-              <span className={`mt-2 text-xs font-semibold uppercase tracking-wider ${currentStep >= step.id ? 'text-blue-700' : 'text-gray-400'}`}>{step.label}</span>
-            </div>
-          ))}
+        {/* STEPPER */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            {[
+              { id: 1, label: "Especialidad", icon: Stethoscope },
+              { id: 2, label: "Médico", icon: User },
+              { id: 3, label: "Resumen", icon: CheckCircle2 }
+            ].map((step) => {
+              const Icon = step.icon;
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+              
+              return (
+                <div key={step.id} className="flex flex-col items-center flex-1">
+                  <div className={`
+                    w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all
+                    ${isActive ? 'bg-blue-600 text-white' : ''}
+                    ${isCompleted ? 'bg-green-600 text-white' : ''}
+                    ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-500' : ''}
+                  `}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <span className={`text-xs font-medium ${isActive || isCompleted ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* ================= PASO 1: ESPECIALIDADES ================= */}
+        {/* PASO 1: ESPECIALIDADES */}
         {currentStep === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-6">
             
-            {/* BUSCADOR HERO (CORREGIDO: PADDING PL-16) */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-center space-y-6">
-              <h2 className="text-2xl font-bold text-gray-800">¿Qué especialista necesitas hoy?</h2>
-              <div className="relative max-w-2xl mx-auto group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                  <Search className="h-6 w-6" />
-                </div>
+            {/* Buscador */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">¿Qué especialista necesitas?</h2>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <Input 
-                  placeholder="Buscar especialidad (ej. Cardiología, Pediatría)..." 
-                  // CORRECCIÓN: pl-16 para que no pise el icono
-                  className="pl-16 h-16 rounded-full text-lg border-gray-200 bg-gray-50 focus:bg-white shadow-inner focus:shadow-lg focus:border-blue-500 focus:ring-blue-500 transition-all"
+                  placeholder="Buscar especialidad..." 
+                  className="pl-12 h-12 text-base text-center border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   autoFocus
@@ -221,103 +233,98 @@ export function BookAppointment({ onNavigate, user }: BookAppointmentProps) {
               </div>
             </div>
 
+            {/* Lista de especialidades */}
             {isLoadingData ? (
-              <div className="py-20 flex flex-col items-center justify-center text-gray-400">
-                <Loader2 className="h-10 w-10 animate-spin mb-4 text-blue-600" />
-                <p>Cargando especialidades...</p>
+              <div className="py-20 flex flex-col items-center">
+                <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-600">Cargando especialidades...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredSpecialties.map((esp) => (
-                  <div 
+                  <button
                     key={esp.id}
                     onClick={() => handleSelectSpecialty(esp)}
-                    className="group bg-white p-6 rounded-2xl border border-gray-100 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-50 transition-all duration-300 cursor-pointer flex items-center gap-4"
+                    className="bg-white p-5 rounded-xl border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all text-left group"
                   >
-                    <div className="h-14 w-14 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                      <Stethoscope className="h-7 w-7" />
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <Stethoscope className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 mb-1">{esp.nombre}</h3>
+                        <p className="text-sm text-gray-500 line-clamp-2">
+                          {esp.descripcion || "Atención especializada"}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 shrink-0" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-700">{esp.nombre}</h3>
-                      <p className="text-sm text-gray-500 group-hover:text-blue-600/70 line-clamp-1">
-                        {esp.descripcion || "Especialistas disponibles"}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-blue-500" />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
           </div>
         )}
 
-        {/* ================= PASO 2: MÉDICOS ================= */}
+        {/* PASO 2: MÉDICOS */}
         {currentStep === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 border-b border-gray-200 pb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Especialistas en {selectedSpecialty?.nombre}</h2>
-                <p className="text-sm text-gray-500">Selecciona el profesional de tu preferencia</p>
-              </div>
-              <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  placeholder="Filtrar por nombre..." 
-                  // CORRECCIÓN: pl-11
-                  className="pl-11 h-10 border-gray-200 rounded-xl focus:ring-blue-500"
-                  value={searchTerm} 
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                />
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Médicos de {selectedSpecialty?.nombre}</h2>
+                  <p className="text-sm text-gray-500">Selecciona tu médico preferido</p>
+                </div>
+                <div className="relative w-full md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    placeholder="Buscar médico..." 
+                    className="pl-10 h-10 border-gray-300"
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  />
+                </div>
               </div>
             </div>
 
             {isLoadingData ? (
-              <div className="py-20 flex flex-col items-center justify-center text-gray-400">
-                <Loader2 className="h-10 w-10 animate-spin mb-4 text-blue-600" />
-                <p>Buscando doctores...</p>
+              <div className="py-20 flex flex-col items-center">
+                <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-600">Cargando médicos...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredDoctors.map((doc) => (
-                  <div 
+                  <button
                     key={doc.id_medico}
                     onClick={() => handleSelectDoctor(doc)}
-                    className="group bg-white p-5 rounded-2xl border border-gray-100 hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer flex items-start gap-5"
+                    className="bg-white p-5 rounded-xl border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all text-left group"
                   >
-                    <div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xl font-bold text-gray-500 border-2 border-white shadow-sm">
-                      {getDoctorName(doc).charAt(4)}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-700 transition-colors">
-                          {getDoctorName(doc)}
-                        </h3>
-                        <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-md border border-yellow-100">
-                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                          <span className="text-xs font-bold text-yellow-700">4.8</span>
-                        </div>
+                    <div className="flex items-start gap-4">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-lg group-hover:scale-105 transition-transform">
+                        <User className="h-8 w-8 text-white" />
                       </div>
-                      
-                      <p className="text-sm font-medium text-blue-600 mb-2">{doc.especialidad.nombre}</p>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <MapPin className="h-3 w-3" />
-                          <span>Consultorio: {doc.telefono_consultorio || "Central"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <CheckCircle2 className="h-3 w-3 text-green-500" />
-                          <span>Licencia: {doc.licencia_medica}</span>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 mb-1">{getDoctorName(doc)}</h3>
+                        <p className="text-sm text-blue-600 mb-2">{doc.especialidad.nombre}</p>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <MapPin className="h-3 w-3" />
+                            <span>{doc.telefono_consultorio || "Consultorio Central"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            <span>Lic: {doc.licencia_medica}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
                 {filteredDoctors.length === 0 && (
-                  <div className="col-span-2 py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
+                  <div className="col-span-2 py-16 text-center bg-white rounded-xl border border-gray-200">
                     <User className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">No se encontraron médicos con ese nombre.</p>
+                    <p className="text-gray-500">No se encontraron médicos</p>
                   </div>
                 )}
               </div>
@@ -325,33 +332,57 @@ export function BookAppointment({ onNavigate, user }: BookAppointmentProps) {
           </div>
         )}
 
-        {/* ================= PASO 3: HORARIO (Sin cambios, ya estaba bien) ================= */}
+        {/* ================= PASO 3: HORARIO Y RESUMEN ================= */}
         {currentStep === 3 && selectedDoctor && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-none shadow-sm bg-white rounded-2xl">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <div className="lg:col-span-2 space-y-5">
+              <Card className="border-2 border-gray-100 shadow-xl bg-white rounded-3xl overflow-hidden">
                 <CardContent className="p-6 md:p-8">
-                  <div className="mb-8">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <CalendarIcon className="h-5 w-5 text-blue-600" />
-                      Selecciona fecha y hora
-                    </h3>
+                  <div className="mb-7">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                        <CalendarIcon className="h-5 w-5 text-white" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900">Selecciona fecha y hora</h3>
+                    </div>
                     <Input 
                       type="date" 
                       value={selectedDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setSelectedDate(e.target.value)}
-                      className="h-12 text-base cursor-pointer border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      className="h-14 text-base font-medium cursor-pointer border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl transition-all shadow-sm hover:shadow-md"
                     />
                   </div>
-                  <div className="mb-8">
-                    <label className="text-xs font-semibold text-gray-500 uppercase mb-3 block">Horarios Disponibles</label>
+                  
+                  <div className="mb-7">
+                    <div className="flex items-center justify-between mb-4">
+                      <label className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-600" />
+                        Horarios Disponibles
+                      </label>
+                      {availableSlots.length > 0 && (
+                        <span className="text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full font-semibold border border-green-200">
+                          {availableSlots.length} disponibles
+                        </span>
+                      )}
+                    </div>
+                    
                     {!selectedDate ? (
-                      <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 border border-dashed border-gray-200 text-sm">Selecciona una fecha primero</div>
+                      <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl text-center border-2 border-dashed border-gray-200">
+                        <CalendarIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500 font-medium">Selecciona una fecha primero</p>
+                      </div>
                     ) : isLoadingData ? (
-                      <div className="p-6 flex justify-center items-center gap-2 text-blue-600 text-sm"><Loader2 className="h-5 w-5 animate-spin" /> Cargando horarios...</div>
+                      <div className="p-8 flex justify-center items-center gap-3">
+                        <div className="w-6 h-6 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <span className="text-blue-600 font-medium">Cargando horarios...</span>
+                      </div>
                     ) : availableSlots.length === 0 ? (
-                      <div className="p-4 bg-orange-50 text-orange-700 rounded-xl border border-orange-100 text-center text-sm">No hay turnos disponibles.</div>
+                      <div className="p-6 bg-orange-50 text-orange-700 rounded-2xl border-2 border-orange-200 text-center">
+                        <Clock className="h-10 w-10 text-orange-400 mx-auto mb-2" />
+                        <p className="font-semibold">No hay turnos disponibles para esta fecha.</p>
+                        <p className="text-sm text-orange-600 mt-1">Intenta con otra fecha</p>
+                      </div>
                     ) : (
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                         {availableSlots.map((slot) => (
@@ -359,49 +390,104 @@ export function BookAppointment({ onNavigate, user }: BookAppointmentProps) {
                             key={slot}
                             onClick={() => setSelectedTime(slot)}
                             className={`
-                              py-2.5 px-2 rounded-lg font-medium text-sm transition-all duration-200 border
+                              relative py-3 px-2 rounded-xl font-bold text-sm transition-all duration-300 border-2 overflow-hidden
                               ${selectedTime === slot 
-                                ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200 ring-offset-1' 
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}
+                                ? 'bg-white text-red-600 border-red-500 shadow-xl shadow-red-100 scale-105 ring-4 ring-red-100' 
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600 hover:shadow-lg hover:scale-105'}
                             `}
                           >
+                            {selectedTime === slot && (
+                              <div className="absolute top-1 right-1 bg-red-500 rounded-full p-0.5">
+                                <CheckCircle2 className="h-3 w-3 text-white" />
+                              </div>
+                            )}
                             {slot}
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
+                  
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Motivo de consulta</label>
+                    <label className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3 block flex items-center gap-2">
+                      <Stethoscope className="h-4 w-4 text-blue-600" />
+                      Motivo de consulta
+                    </label>
                     <Textarea 
-                      placeholder="Describe brevemente tus síntomas..."
+                      placeholder="Describe brevemente tus síntomas o motivo de la consulta..."
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
-                      rows={3}
-                      className="bg-gray-50 border-gray-200 focus:bg-white transition-all rounded-xl resize-none"
+                      rows={4}
+                      className="bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl resize-none text-base"
                     />
                   </div>
                 </CardContent>
               </Card>
             </div>
+            
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden sticky top-6">
-                <div className="bg-gray-900 p-6 text-white">
-                  <h3 className="font-bold text-lg">Resumen</h3>
-                  <p className="text-gray-400 text-xs mt-1">Verifica los detalles antes de confirmar</p>
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden sticky top-6 border-2 border-gray-200">
+                <div className="bg-blue-600 p-6 text-white">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="text-sm font-semibold">PASO 3 DE 3</span>
+                  </div>
+                  <h3 className="font-bold text-2xl">Resumen</h3>
+                  <p className="text-blue-100 text-sm mt-1">Verifica los detalles antes de confirmar</p>
                 </div>
+                
                 <div className="p-6 space-y-6">
-                  <div className="flex gap-4 items-start">
-                    <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold border border-blue-100 shrink-0"><User className="h-5 w-5" /></div>
-                    <div><p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Profesional</p><p className="font-bold text-gray-900 text-sm">{getDoctorName(selectedDoctor)}</p><p className="text-xs text-gray-500">{selectedSpecialty?.nombre}</p></div>
+                  {/* Profesional */}
+                  <div className="flex gap-3 items-start p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="h-12 w-12 rounded-lg bg-blue-600 flex items-center justify-center shadow-md shrink-0">
+                      <User className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-blue-700 uppercase font-bold mb-1.5">Profesional</p>
+                      <p className="font-bold text-gray-900 text-sm leading-tight mb-1">{getDoctorName(selectedDoctor)}</p>
+                      <p className="text-xs text-gray-600">{selectedSpecialty?.nombre}</p>
+                    </div>
                   </div>
-                  <div className="flex gap-4 items-start">
-                    <div className="h-10 w-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold border border-orange-100 shrink-0"><Clock className="h-5 w-5" /></div>
-                    <div><p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Cita</p><p className="font-bold text-gray-900 text-sm capitalize">{selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) : '-'}</p><p className="text-xs text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded w-fit mt-1">{selectedTime || 'Pendiente'}</p></div>
+                  
+                  {/* Cita Programada */}
+                  <div className="flex gap-3 items-start p-4 bg-orange-50 rounded-xl border border-orange-200">
+                    <div className="h-12 w-12 rounded-lg bg-orange-600 flex items-center justify-center shadow-md shrink-0">
+                      <Clock className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-orange-700 uppercase font-bold mb-1.5">Cita Programada</p>
+                      <p className="font-semibold text-gray-900 text-sm capitalize mb-2">
+                        {selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Fecha pendiente'}
+                      </p>
+                      {selectedTime ? (
+                        <div className="inline-flex items-center gap-1.5 bg-red-600 px-3 py-1.5 rounded-md shadow-sm">
+                          <Clock className="h-4 w-4 text-white" />
+                          <span className="text-white font-bold text-sm">{selectedTime}</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-red-600 font-semibold">Hora pendiente</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="pt-4 border-t border-gray-100">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all" disabled={!selectedDate || !selectedTime || isSubmitting} onClick={handleConfirmBooking}>
-                      {isSubmitting ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Confirmando...</>) : (<>Confirmar Reserva <CheckCircle2 className="ml-2 h-5 w-5" /></>)}
+                  
+                  {/* Botón Confirmar */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <Button 
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-14 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-base" 
+                      disabled={!selectedDate || !selectedTime || isSubmitting} 
+                      onClick={handleConfirmBooking}
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center gap-2 text-white">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span className="text-white font-bold">Confirmando...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2 text-white">
+                          <span className="text-white font-bold">Confirmar Reserva</span>
+                          <CheckCircle2 className="h-5 w-5 text-white" />
+                        </div>
+                      )}
                     </Button>
                   </div>
                 </div>
