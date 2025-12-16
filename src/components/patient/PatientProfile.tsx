@@ -9,6 +9,7 @@ import { User } from "../../types";
 import { Camera, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { http } from "../../services/http";
+import { patientService } from "../../services/patient.service";
 import { STORAGE_KEYS } from "../../config/api";
 
 interface PatientProfileProps {
@@ -16,6 +17,50 @@ interface PatientProfileProps {
 }
 
 export function PatientProfile({ user }: PatientProfileProps) {
+    const handleSave = async () => {
+      try {
+        setIsLoading(true);
+        const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+        if (!userData) {
+          toast.error("Error: No se encontró información del usuario");
+          return;
+        }
+        const parsedUser = JSON.parse(userData);
+        const pacienteId = parsedUser.paciente?.id || parsedUser.id;
+        if (!pacienteId) {
+          toast.error("No se encontró el ID del paciente");
+          return;
+        }
+        const dataToUpdate = {
+          nombre: formData.nombre,
+          telefono: formData.telefono,
+          fecha_nacimiento: formData.fecha_nacimiento,
+          direccion: formData.direccion,
+          tipo_sangre: formData.tipo_sangre,
+        };
+        await patientService.updateProfile(pacienteId, dataToUpdate);
+        const updatedUser = {
+          ...parsedUser,
+          nombre: formData.nombre,
+          telefono: formData.telefono,
+          paciente: {
+            ...(parsedUser.paciente || {}),
+            telefono: formData.telefono,
+            fecha_nacimiento: formData.fecha_nacimiento,
+            direccion: formData.direccion,
+            tipo_sangre: formData.tipo_sangre,
+          }
+        };
+        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        toast.success("✓ Perfil actualizado exitosamente");
+        setIsEditing(false);
+      } catch (error: any) {
+        console.error("Error al actualizar perfil:", error);
+        toast.error(error.response?.data?.message || "✗ Error al actualizar el perfil");
+      } finally {
+        setIsLoading(false);
+      }
+    };
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -33,69 +78,35 @@ export function PatientProfile({ user }: PatientProfileProps) {
     if (userData) {
       const parsedUser = JSON.parse(userData);
       const paciente = parsedUser.paciente || parsedUser;
-      
+
+      // Formatear fecha_nacimiento a yyyy-MM-dd si existe
+      let fechaNacimiento = "";
+      if (paciente.fecha_nacimiento) {
+        // Si viene en formato dd/mm/yyyy o yyyy-mm-dd
+        if (/^\d{4}-\d{2}-\d{2}$/.test(paciente.fecha_nacimiento)) {
+          fechaNacimiento = paciente.fecha_nacimiento;
+        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(paciente.fecha_nacimiento)) {
+          // Convertir dd/mm/yyyy a yyyy-mm-dd
+          const [d, m, y] = paciente.fecha_nacimiento.split("/");
+          fechaNacimiento = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        } else {
+          // Intentar parsear con Date
+          const dateObj = new Date(paciente.fecha_nacimiento);
+          if (!isNaN(dateObj.getTime())) {
+            fechaNacimiento = dateObj.toISOString().slice(0, 10);
+          }
+        }
+      }
       setFormData({
         nombre: parsedUser.nombre || "",
         email: parsedUser.email || "",
         telefono: paciente.telefono || parsedUser.telefono || "",
-        fecha_nacimiento: paciente.fecha_nacimiento || "",
+        fecha_nacimiento: fechaNacimiento,
         direccion: paciente.direccion || "",
         tipo_sangre: paciente.tipo_sangre || "",
       });
     }
   }, []);
-
-  const handleSave = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Obtener el ID del paciente
-      const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
-      if (!userData) {
-        toast.error("Error: No se encontró información del usuario");
-        return;
-      }
-      
-      const parsedUser = JSON.parse(userData);
-      const pacienteId = parsedUser.paciente?.id || parsedUser.id;
-      
-      // Preparar los datos para enviar (sin el email)
-      const dataToUpdate = {
-        nombre: formData.nombre,
-        telefono: formData.telefono,
-        fecha_nacimiento: formData.fecha_nacimiento,
-        direccion: formData.direccion,
-        tipo_sangre: formData.tipo_sangre,
-      };
-
-      // Actualizar en el backend
-      const response = await http.put(`/pacientes/${pacienteId}`, dataToUpdate);
-      
-      // Actualizar localStorage con los nuevos datos
-      const updatedUser = {
-        ...parsedUser,
-        nombre: formData.nombre,
-        telefono: formData.telefono,
-        paciente: {
-          ...(parsedUser.paciente || {}),
-          telefono: formData.telefono,
-          fecha_nacimiento: formData.fecha_nacimiento,
-          direccion: formData.direccion,
-          tipo_sangre: formData.tipo_sangre,
-        }
-      };
-      
-      localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
-      
-      toast.success("✓ Perfil actualizado exitosamente");
-      setIsEditing(false);
-    } catch (error: any) {
-      console.error("Error al actualizar perfil:", error);
-      toast.error(error.response?.data?.message || "✗ Error al actualizar el perfil");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const getInitials = (nombre: string) => {
     return nombre
@@ -121,7 +132,7 @@ export function PatientProfile({ user }: PatientProfileProps) {
               <div className="relative">
                 <Avatar className="h-24 w-24">
                   <AvatarFallback className="bg-blue-600 text-white text-2xl">
-                    {getInitials(user.nombre)}
+                    {getInitials(formData.nombre)}
                   </AvatarFallback>
                 </Avatar>
                 <Button
@@ -132,17 +143,17 @@ export function PatientProfile({ user }: PatientProfileProps) {
                 </Button>
               </div>
               <div>
-                <h2 className="text-xl">{user.nombre}</h2>
-                <p className="text-sm text-gray-500 capitalize">{user.rol}</p>
+                <h2 className="text-xl">{formData.nombre}</h2>
+                <p className="text-sm text-gray-500 capitalize">Paciente</p>
               </div>
               <div className="w-full pt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Email:</span>
-                  <span>{user.email}</span>
+                  <span>{formData.email}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Teléfono:</span>
-                  <span>{user.telefono}</span>
+                  <span>{formData.telefono}</span>
                 </div>
               </div>
             </div>
