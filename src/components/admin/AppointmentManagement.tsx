@@ -1,34 +1,3 @@
-<<<<<<< Updated upstream
-import { useState, useEffect } from "react"; // 1. Importante: useEffect
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { StatusBadge } from "../shared/StatusBadge";
-import { Appointment, AppointmentStatus } from "../../types";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
-
-export function AppointmentManagement() {
-  // 2. Estado para guardar las citas que traigamos de la BD
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true); // Para mostrar "Cargando..."
-
-=======
 import { useState, useEffect } from "react";
 import * as httpService from "../../services/http"; 
 
@@ -85,65 +54,11 @@ export function AppointmentManagement() {
   const [isLoading, setIsLoading] = useState(true);
   
   // Filtros
->>>>>>> Stashed changes
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("todas");
   
   // Estado del Modal y Edición
   const [showAddDialog, setShowAddDialog] = useState(false);
-<<<<<<< Updated upstream
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-
-  // 3. AQUÍ ESTÁ LA SOLUCIÓN: Conectamos con Laravel al cargar la página
-  useEffect(() => {
-    const fetchCitas = async () => {
-      try {
-        console.log("Intentando conectar con el backend...");
-        const response = await fetch('http://localhost:8000/api/citas'); 
-        
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("Datos recibidos:", data); // Mira la consola (F12) para ver esto
-
-        // Transformamos los datos para que React los entienda
-        const citasFormateadas = data.map((cita: any) => ({
-            id: cita.id,
-            pacienteId: cita.pacienteId || cita.paciente_id,
-            pacienteNombre: cita.pacienteNombre, 
-            medicoId: cita.medicoId || cita.medico_id,
-            medicoNombre: cita.medicoNombre,
-            especialidad: cita.especialidad,
-            fecha: cita.fecha,
-            hora: cita.hora,
-            // Convertimos 'programada' de la DB a 'pendiente' para el Frontend
-            estado: cita.estado === 'programada' ? 'pendiente' : cita.estado,
-            motivo: cita.motivo
-        }));
-
-        setAppointments(citasFormateadas);
-      } catch (error) {
-        console.error("Error cargando citas:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCitas();
-  }, []);
-
-  // Filtros (igual que antes)
-  const filteredAppointments = appointments.filter(appointment => {
-    const pNombre = appointment.pacienteNombre || "";
-    const mNombre = appointment.medicoNombre || "";
-    const matchesSearch = pNombre.toLowerCase().includes(searchTerm.toLowerCase()) || mNombre.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTab = activeTab === "todas" || appointment.estado === activeTab;
-    return matchesSearch && matchesTab;
-  });
-
-=======
   const [editingId, setEditingId] = useState<number | null>(null); // ID de la cita que se está editando (null si es nueva)
   
   // Listas para selects
@@ -321,68 +236,19 @@ export function AppointmentManagement() {
     return [`${hour.toString().padStart(2, '0')}:00`, `${hour.toString().padStart(2, '0')}:30`];
   }).flat();
 
->>>>>>> Stashed changes
   return (
     <div className="p-6 space-y-6">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-<<<<<<< Updated upstream
-          <h1 className="text-3xl font-bold">Gestión de Citas</h1>
-          <p className="text-gray-500">Administra todas las citas del sistema</p>
-        </div>
-        <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700">
-=======
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Gestión de Citas</h1>
           <p className="text-gray-500 mt-1">Administra y supervisa todas las citas médicas.</p>
         </div>
         <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
->>>>>>> Stashed changes
           <Plus className="h-4 w-4 mr-2" /> Nueva Cita
         </Button>
       </div>
 
-<<<<<<< Updated upstream
-      {/* Tarjetas de Resumen (Con datos reales) */}
-      <div className="grid grid-cols-5 gap-4">
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-bold">{appointments.length}</p><p className="text-sm text-gray-500">Total</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-bold text-blue-600">{appointments.filter(a => a.estado === 'activa' || a.estado === 'pendiente').length}</p><p className="text-sm text-gray-500">Activas</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-bold text-yellow-600">{appointments.filter(a => a.estado === 'pendiente').length}</p><p className="text-sm text-gray-500">Pendientes</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-bold text-green-600">{appointments.filter(a => a.estado === 'completada').length}</p><p className="text-sm text-gray-500">Completadas</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-bold text-red-600">{appointments.filter(a => a.estado === 'cancelada').length}</p><p className="text-sm text-gray-500">Canceladas</p></CardContent></Card>
-      </div>
-
-      {/* Tabla */}
-      <Card>
-        <CardHeader><CardTitle>Lista de Citas</CardTitle></CardHeader>
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Paciente</TableHead>
-                    <TableHead>Médico</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Estado</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {loading ? (
-                    <TableRow><TableCell colSpan={4} className="text-center">Cargando...</TableCell></TableRow>
-                ) : filteredAppointments.map((cita) => (
-                    <TableRow key={cita.id}>
-                        <TableCell>{cita.pacienteNombre}</TableCell>
-                        <TableCell>{cita.medicoNombre}</TableCell>
-                        <TableCell>{cita.fecha}</TableCell>
-                        <TableCell><StatusBadge status={cita.estado} /></TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
-      </Card>
-      
-      {/* Diálogo mantenido igual... */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent><DialogHeader><DialogTitle>Nueva Cita</DialogTitle></DialogHeader></DialogContent>
-=======
       {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard title="Total" value={stats.total} />
@@ -586,7 +452,6 @@ export function AppointmentManagement() {
             </Button>
           </DialogFooter>
         </DialogContent>
->>>>>>> Stashed changes
       </Dialog>
     </div>
   );
