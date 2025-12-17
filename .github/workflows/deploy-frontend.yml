@@ -2,10 +2,7 @@ name: Desplegar Frontend React ⚛️
 
 on:
   push:
-    branches:
-      - main
-      - rama-fernandez # Tu rama de trabajo
-
+    branches: [ "rama-fernandez", "main" ]  
 jobs:
   build-and-deploy:
     name: 🏗️ Build & Deploy
