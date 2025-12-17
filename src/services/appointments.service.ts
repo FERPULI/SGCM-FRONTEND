@@ -5,17 +5,16 @@
 
 import { http, ApiResponse } from './http';
 import { API_ENDPOINTS } from '../config/api';
-import { Appointment, AppointmentStatus, PaginatedResponse, CreateAppointmentPayload, AvailableSlotsResponse } from '../types';
+import { Appointment, AppointmentStatus, CreateAppointmentPayload, AvailableSlotsResponse } from '../types';
 
 // --- Interfaces para el Payload de Actualización ---
-// Ajustadas para coincidir con los campos de la base de datos (snake_case)
 export interface UpdateAppointmentData {
   fecha_hora_inicio?: string;
   motivo_consulta?: string;
   estado?: AppointmentStatus;
   medico_id?: number;
   paciente_id?: number;
-  notas_paciente?: string; // O 'notes' según tu DB
+  notas_paciente?: string;
 }
 
 export interface AppointmentFilters {
@@ -31,20 +30,6 @@ export interface AppointmentFilters {
   fecha?: string;
   medico_id?: number;
 }
-
-const emptyPaginatedResponse: PaginatedResponse<Appointment> = {
-  data: [],
-  links: { first: null, last: null, prev: null, next: null },
-  meta: {
-    current_page: 1,
-    from: 0,
-    last_page: 1,
-    path: "",
-    per_page: 10,
-    to: 0,
-    total: 0,
-  }
-};
 
 export const appointmentsService = {
   /**
@@ -118,7 +103,6 @@ export const appointmentsService = {
       data
     );
     
-    // Verificación robusta de la respuesta
     if (response.data?.data) {
       return response.data.data;
     } else if (response.data) {
@@ -136,45 +120,17 @@ export const appointmentsService = {
   },
 
   /**
-   * Cancelar cita (Lógica de negocio)
+   * Cancelar cita
    */
   cancelAppointment: async (id: number, reason?: string): Promise<boolean> => {
     try {
-        // Opción A: Borrado físico
+        // Usamos DELETE físico según tu configuración original
         await http.delete(API_ENDPOINTS.APPOINTMENTS.DELETE(id));
-        
-        // Opción B: Actualización de estado (Descomentar si usas soft delete/estados)
-        // await http.put(API_ENDPOINTS.APPOINTMENTS.UPDATE(id), { estado: 'cancelada', motivo_cancelacion: reason });
-        
         return true;
     } catch (error) {
         console.error("Error al cancelar cita:", error);
         throw error;
     }
-  },
-
-  /**
-   * Reprogramar Cita (Helper específico)
-   */
-  rescheduleAppointment: async (id: number, date: string, time: string): Promise<Appointment> => {
-    const payload = {
-      fecha_hora_inicio: `${date} ${time}:00`
-    };
-
-  /**
-   * Cancelar cita
-   */
-  cancelAppointment: async (id: number, reason?: string): Promise<Appointment> => {
-    const response = await http.put<ApiResponse<Appointment>>(
-      API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      { 
-        estado: 'cancelada',
-        cancellation_reason: reason 
-      }
-    );
-
-    if (!response.data?.data) throw new Error("Error en respuesta al reprogramar.");
-    return response.data.data;
   },
 
   /**
@@ -184,6 +140,7 @@ export const appointmentsService = {
     const response = await http.post<ApiResponse<Appointment>>(
       API_ENDPOINTS.APPOINTMENTS.CONFIRM(id)
     );
+    // El ! al final fuerza a TS a confiar en que existe, pero idealmente valida
     return response.data?.data!;
   },
 
@@ -202,11 +159,8 @@ export const appointmentsService = {
    * Reprogramar cita
    */
   rescheduleAppointment: async (id: number, newDate: string, newTime: string): Promise<Appointment> => {
-    // Asegurarnos de que el formato de hora sea correcto (HH:MM)
-    // Los slots vienen como "15:30", así que solo necesitamos agregar ":00" si no lo tiene
     let formattedTime = newTime.trim();
     
-    // Si el formato es "HH:MM", agregar ":00"
     if (formattedTime.match(/^\d{2}:\d{2}$/)) {
       formattedTime = `${formattedTime}:00`;
     }
@@ -228,8 +182,6 @@ export const appointmentsService = {
       payload
     );
     
-    console.log('Respuesta completa de reprogramación:', response);
-    
     if (!response.data?.data) {
       throw new Error("La API no devolvió la cita reprogramada.");
     }
@@ -238,8 +190,7 @@ export const appointmentsService = {
   },
 
   /**
-   * (MODIFICADO) Obtener horarios disponibles
-   * Devuelve un array de strings ['09:00', '09:30']
+   * Obtener horarios disponibles
    */
   getAvailableSlots: async (medicoId: number, date: string): Promise<string[]> => {
     try {
@@ -248,7 +199,6 @@ export const appointmentsService = {
         { params: { medico_id: medicoId, fecha: date } }
       );
       
-      // Manejo flexible de la respuesta
       // @ts-ignore
       if (response.data && Array.isArray(response.data.slots)) return response.data.slots;
       // @ts-ignore
