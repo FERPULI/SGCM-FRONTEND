@@ -1,8 +1,5 @@
-import React from 'react';
-import { Search, Bell, ChevronDown, LogOut, User as UserIcon, Settings, Menu } from "lucide-react";
-import { Input } from "../ui/input";
+import { Menu, Bell, ChevronDown, User, LogOut, Settings } from "lucide-react";
 import { Button } from "../ui/button";
-import { Avatar, AvatarFallback } from "../ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,25 +8,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Badge } from "../ui/badge";
-import { User } from "../../types";
-
-// 1. Hook de autenticación
-import { useAuth } from '../../hooks/useAuth';
 
 interface TopBarProps {
-  user: User | null;
+  user: any;
+  onRoleSwitch: (role: string) => void;
   onLogout: () => void;
   onNavigate: (page: string) => void;
-  onSidebarOpen?: () => void;
+  onSidebarOpen: () => void; // Recibimos la función aquí
 }
 
-export function TopBar({ user: propUser, onLogout, onNavigate, onSidebarOpen }: TopBarProps) {
+export function TopBar({ user, onRoleSwitch, onLogout, onNavigate, onSidebarOpen }: TopBarProps) {
   
-  // 2. Obtener la sesión real
-  const { user: authUser } = useAuth();
-  const currentUser = authUser || propUser;
+  const roleLabel = user.rol === 'admin' ? 'Administrador' : 
+                    user.rol === 'doctor' || user.rol === 'medico' ? 'Médico' : 'Paciente';
 
+<<<<<<< Updated upstream
   // 3. LÓGICA CORREGIDA DE NOMBRE Y APELLIDOS
   
   // Buscamos el NOMBRE (name, first_name, nombres o nombre)
@@ -58,21 +51,32 @@ export function TopBar({ user: propUser, onLogout, onNavigate, onSidebarOpen }: 
 
   // Iniciales (Primera letra del nombre + Primera del apellido)
   const initials = (rawName.charAt(0) + (rawLastName ? rawLastName.charAt(0) : '')).toUpperCase();
+=======
+  // Iniciales seguras
+  const iniciales = user.nombre && user.apellidos 
+    ? `${user.nombre.charAt(0)}${user.apellidos.charAt(0)}`.toUpperCase()
+    : 'U';
+>>>>>>> Stashed changes
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+    <header className="h-16 border-b bg-white flex items-center justify-between px-4 lg:px-6 shadow-sm z-30 flex-shrink-0">
       
-      {/* IZQUIERDA */}
-      <div className="flex items-center gap-4 flex-1">
-        <button onClick={onSidebarOpen} className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-md">
+      {/* BOTÓN DEL MENÚ (IZQUIERDA) */}
+      <div className="flex items-center gap-4">
+        <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => {
+                console.log("🔘 Botón presionado en TopBar");
+                onSidebarOpen();
+            }}
+            className="text-gray-600 hover:bg-gray-100"
+        >
           <Menu className="h-6 w-6" />
-        </button>
-        <div className="relative w-full max-w-md hidden md:block">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Buscar..." className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-full h-9" />
-        </div>
+        </Button>
       </div>
 
+<<<<<<< Updated upstream
       {/* DERECHA */}
       <div className="flex items-center gap-2 sm:gap-4">
         
@@ -88,49 +92,46 @@ export function TopBar({ user: propUser, onLogout, onNavigate, onSidebarOpen }: 
             <div className="p-4 text-sm text-gray-500 text-center">No hay notificaciones nuevas</div>
           </DropdownMenuContent>
         </DropdownMenu>
+=======
+      {/* DERECHA (PERFIL) */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5 text-gray-500" />
+          <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border border-white"></span>
+        </Button>
+
+        <div className="h-8 w-px bg-gray-200 mx-2 hidden sm:block"></div>
+>>>>>>> Stashed changes
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="pl-2 pr-2 sm:pr-4 hover:bg-gray-100 rounded-full h-10 border border-transparent hover:border-gray-200">
-              
-              <Avatar className="h-8 w-8 border border-gray-200 mr-2">
-                <AvatarFallback className="bg-blue-600 text-white text-xs font-bold">
-                    {initials}
-                </AvatarFallback>
-              </Avatar>
-              
-              <div className="text-left hidden md:block mr-2">
-                
-                {/* AQUÍ SE MUESTRA: Dr. Nombre Apellidos */}
-                <div className="text-sm font-bold leading-none text-gray-800">
-                    {displayName}
-                </div>
-                
-                <div className="text-xs text-blue-600 font-medium mt-0.5 capitalize">
-                    {displayRole}
-                </div>
-
+            <button className="flex items-center gap-3 focus:outline-none group">
+              <div className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium shadow-sm ring-2 ring-transparent group-hover:ring-blue-100 transition-all">
+                {iniciales}
               </div>
-              
-              <ChevronDown className="h-4 w-4 text-gray-400 hidden md:block" />
-            </Button>
+              <div className="hidden md:block text-left">
+                <p className="text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors">
+                  {user.nombre} {user.apellidos}
+                </p>
+                <p className="text-xs text-blue-600 font-medium capitalize">
+                   {roleLabel}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+            </button>
           </DropdownMenuTrigger>
-          
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-            <div className="px-2 py-1.5 text-xs text-gray-500 truncate border-b border-gray-100 mb-1">
-               {currentUser?.email}
-            </div>
-            
-            <DropdownMenuItem onClick={() => onNavigate('perfil')} className="cursor-pointer gap-2">
-              <UserIcon className="h-4 w-4" /> <span>Ver Perfil</span>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onNavigate('perfil')} className="cursor-pointer">
+              <User className="mr-2 h-4 w-4" /> Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onNavigate('configuracion')} className="cursor-pointer gap-2">
-              <Settings className="h-4 w-4" /> <span>Configuración</span>
+            <DropdownMenuItem onClick={() => onNavigate('configuracion')} className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" /> Configuración
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogout} className="text-red-600 cursor-pointer gap-2 bg-red-50/50 hover:bg-red-100">
-              <LogOut className="h-4 w-4" /> <span>Cerrar sesión</span>
+            <DropdownMenuItem onClick={onLogout} className="text-red-600 cursor-pointer focus:text-red-600">
+              <LogOut className="mr-2 h-4 w-4" /> Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

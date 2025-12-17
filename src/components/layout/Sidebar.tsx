@@ -38,7 +38,6 @@ const menuItems: MenuItem[] = [
   { id: 'medicos', label: 'Médicos', icon: Stethoscope, roles: ['admin'] },
   { id: 'usuarios', label: 'Usuarios', icon: UserCog, roles: ['admin'] },
   { id: 'historial', label: 'Historial Médico', icon: FileText, roles: ['paciente'] },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] },
   { id: 'perfil', label: 'Perfil', icon: User, roles: ['paciente', 'medico', 'admin'] },
   { id: 'configuracion', label: 'Configuración', icon: Settings, roles: ['admin'] },
 ];
