@@ -35,5 +35,5 @@ jobs:
         # ⚠️ IMPORTANTE: Aquí le decimos que suba SÓLO la carpeta construida
         # ...
         # Para Vite la carpeta SIEMPRE es ./dist/
-        local-dir: ./dist/ 
+        local-dir: build/
         server-dir: ./
