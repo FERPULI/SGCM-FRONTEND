@@ -31,6 +31,9 @@ export function TopBar({ user, onRoleSwitch, onLogout, onNavigate, onSidebarOpen
     ? `${nombreMostrar.charAt(0)}${apellidoMostrar.charAt(0)}`.toUpperCase()
     : nombreMostrar.charAt(0).toUpperCase();
 
+  // Verificar si es paciente para mostrar botón "Reservar Cita"
+  const isPatient = roleName.includes('paciente') || roleName.includes('patient');
+
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-4 lg:px-6 shadow-sm z-30 flex-shrink-0">
       

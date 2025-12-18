@@ -12,6 +12,18 @@ const emptyDashboard: PatientDashboardStats = {
 };
 
 export const patientService = {
+    /**
+     * Actualizar datos del paciente
+     */
+    updateProfile: async (pacienteId: number, data: any) => {
+      try {
+        // Usar la ruta /users/{id} (corregido)
+        const response = await http.put(`/users/${pacienteId}`, data);
+        return response.data;
+      } catch (error) {
+        throw error;
+      }
+    },
   /**
    * Obtener datos del dashboard
    */

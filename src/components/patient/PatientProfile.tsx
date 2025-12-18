@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -6,24 +6,107 @@ import { Label } from "../ui/label";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { User } from "../../types";
-import { Camera, Save } from "lucide-react";
+import { Camera, Save, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { http } from "../../services/http";
+import { patientService } from "../../services/patient.service";
+import { STORAGE_KEYS } from "../../config/api";
 
 interface PatientProfileProps {
   user: User;
 }
 
 export function PatientProfile({ user }: PatientProfileProps) {
+    const handleSave = async () => {
+      try {
+        setIsLoading(true);
+        const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+        if (!userData) {
+          toast.error("Error: No se encontró información del usuario");
+          return;
+        }
+        const parsedUser = JSON.parse(userData);
+        const pacienteId = parsedUser.paciente?.id || parsedUser.id;
+        if (!pacienteId) {
+          toast.error("No se encontró el ID del paciente");
+          return;
+        }
+        const dataToUpdate = {
+          nombre: formData.nombre,
+          telefono: formData.telefono,
+          fecha_nacimiento: formData.fecha_nacimiento,
+          direccion: formData.direccion,
+          tipo_sangre: formData.tipo_sangre,
+        };
+        await patientService.updateProfile(pacienteId, dataToUpdate);
+        const updatedUser = {
+          ...parsedUser,
+          nombre: formData.nombre,
+          telefono: formData.telefono,
+          paciente: {
+            ...(parsedUser.paciente || {}),
+            telefono: formData.telefono,
+            fecha_nacimiento: formData.fecha_nacimiento,
+            direccion: formData.direccion,
+            tipo_sangre: formData.tipo_sangre,
+          }
+        };
+        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        toast.success("✓ Perfil actualizado exitosamente");
+        setIsEditing(false);
+      } catch (error: any) {
+        console.error("Error al actualizar perfil:", error);
+        toast.error(error.response?.data?.message || "✗ Error al actualizar el perfil");
+      } finally {
+        setIsLoading(false);
+      }
+    };
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    nombre: user.nombre,
-    email: user.email,
-    telefono: user.telefono,
+    nombre: "",
+    email: "",
+    telefono: "",
+    fecha_nacimiento: "",
+    direccion: "",
+    tipo_sangre: "",
   });
 
-  const handleSave = () => {
-    // Save logic here
-    setIsEditing(false);
-  };
+  useEffect(() => {
+    // Cargar datos del paciente desde localStorage
+    const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      const paciente = parsedUser.paciente || parsedUser;
+
+      // Formatear fecha_nacimiento a yyyy-MM-dd si existe
+      let fechaNacimiento = "";
+      if (paciente.fecha_nacimiento) {
+        // Si viene en formato dd/mm/yyyy o yyyy-mm-dd
+        if (/^\d{4}-\d{2}-\d{2}$/.test(paciente.fecha_nacimiento)) {
+          fechaNacimiento = paciente.fecha_nacimiento;
+        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(paciente.fecha_nacimiento)) {
+          // Convertir dd/mm/yyyy a yyyy-mm-dd
+          const [d, m, y] = paciente.fecha_nacimiento.split("/");
+          fechaNacimiento = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        } else {
+          // Intentar parsear con Date
+          const dateObj = new Date(paciente.fecha_nacimiento);
+          if (!isNaN(dateObj.getTime())) {
+            fechaNacimiento = dateObj.toISOString().slice(0, 10);
+          }
+        }
+      }
+      setFormData({
+        nombre: parsedUser.nombre || "",
+        email: parsedUser.email || "",
+        telefono: paciente.telefono || parsedUser.telefono || "",
+        fecha_nacimiento: fechaNacimiento,
+        direccion: paciente.direccion || "",
+        tipo_sangre: paciente.tipo_sangre || "",
+      });
+    }
+  }, []);
 
   const getInitials = (nombre: string) => {
     return nombre
@@ -49,7 +132,7 @@ export function PatientProfile({ user }: PatientProfileProps) {
               <div className="relative">
                 <Avatar className="h-24 w-24">
                   <AvatarFallback className="bg-blue-600 text-white text-2xl">
-                    {getInitials(user.nombre)}
+                    {getInitials(formData.nombre)}
                   </AvatarFallback>
                 </Avatar>
                 <Button
@@ -60,17 +143,17 @@ export function PatientProfile({ user }: PatientProfileProps) {
                 </Button>
               </div>
               <div>
-                <h2 className="text-xl">{user.nombre}</h2>
-                <p className="text-sm text-gray-500 capitalize">{user.rol}</p>
+                <h2 className="text-xl">{formData.nombre}</h2>
+                <p className="text-sm text-gray-500 capitalize">Paciente</p>
               </div>
               <div className="w-full pt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Email:</span>
-                  <span>{user.email}</span>
+                  <span>{formData.email}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Teléfono:</span>
-                  <span>{user.telefono}</span>
+                  <span>{formData.telefono}</span>
                 </div>
               </div>
             </div>
@@ -91,9 +174,23 @@ export function PatientProfile({ user }: PatientProfileProps) {
                   <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
                     Cancelar
                   </Button>
-                  <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700">
-                    <Save className="h-4 w-4 mr-2" />
-                    Guardar
+                  <Button 
+                    onClick={handleSave} 
+                    size="sm" 
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Guardar
+                      </>
+                    )}
                   </Button>
                 </div>
               )}
@@ -126,10 +223,8 @@ export function PatientProfile({ user }: PatientProfileProps) {
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                      disabled={!isEditing}
+                      disabled={true}
+                      className="bg-gray-50"
                     />
                   </div>
                   <div className="space-y-2">
@@ -144,10 +239,14 @@ export function PatientProfile({ user }: PatientProfileProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fechaNacimiento">Fecha de Nacimiento</Label>
+                    <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
                     <Input
-                      id="fechaNacimiento"
+                      id="fecha_nacimiento"
                       type="date"
+                      value={formData.fecha_nacimiento}
+                      onChange={(e) =>
+                        setFormData({ ...formData, fecha_nacimiento: e.target.value })
+                      }
                       disabled={!isEditing}
                     />
                   </div>
@@ -155,15 +254,23 @@ export function PatientProfile({ user }: PatientProfileProps) {
                     <Label htmlFor="direccion">Dirección</Label>
                     <Input
                       id="direccion"
+                      value={formData.direccion}
+                      onChange={(e) =>
+                        setFormData({ ...formData, direccion: e.target.value })
+                      }
                       placeholder="Calle, Ciudad, CP"
                       disabled={!isEditing}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="seguroMedico">Seguro Médico</Label>
+                    <Label htmlFor="tipo_sangre">Tipo de Sangre</Label>
                     <Input
-                      id="seguroMedico"
-                      placeholder="Nombre del seguro"
+                      id="tipo_sangre"
+                      value={formData.tipo_sangre}
+                      onChange={(e) =>
+                        setFormData({ ...formData, tipo_sangre: e.target.value })
+                      }
+                      placeholder="Ej: O+, A+, B-, AB+"
                       disabled={!isEditing}
                     />
                   </div>
