@@ -9,20 +9,19 @@ import { PatientCalendar } from "./components/patient/PatientCalendar";
 import { MedicalHistory } from "./components/patient/MedicalHistory";
 import { PatientProfile } from "./components/patient/PatientProfile";
 
+// [SOLUCIÓN DEL ERROR] IMPORTACIÓN CON LLAVES
 import { DoctorDashboard } from "./components/doctor/DoctorDashboard"; 
+
 import { DoctorAppointments } from "./components/doctor/DoctorAppointments";
 import { DoctorCalendar } from "./components/doctor/DoctorCalendar";
 import { PatientDetails } from "./components/doctor/PatientDetails";
 import { DoctorProfile } from "./components/doctor/DoctorProfile";
-
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
 import { AppointmentManagement } from "./components/admin/AppointmentManagement"; 
+import { Reports } from "./components/admin/Reports"; 
 import { Settings } from "./components/admin/Settings"; 
 import { DoctorManagement } from "./components/admin/DoctorManagement";
-// 👇 1. IMPORTACIÓN DEL NUEVO PERFIL
-import { AdminProfile } from "./components/admin/AdminProfile";
-
 import { User } from "./types";
 import { Toaster } from "./components/ui/sonner";
 import { authService } from "./services/auth.service";
@@ -101,6 +100,7 @@ export default function App() {
     if (currentUser.rol === 'doctor' || currentUser.rol === 'medico') {
       switch (currentPage) {
         case 'inicio': 
+          // Pasamos user={currentUser}
           return <DoctorDashboard onNavigate={handleNavigate} user={currentUser} />;
         case 'citas': return <DoctorAppointments />;
         case 'calendario': return <DoctorCalendar />;
@@ -116,11 +116,9 @@ export default function App() {
         case 'usuarios': return <UserManagement />; 
         case 'medicos': return <DoctorManagement />;
         case 'citas': return <AppointmentManagement />; 
+        case 'reportes': return <Reports />;
         case 'configuracion': return <Settings />;
-        
-        // 👇 2. AQUÍ CONECTAMOS EL COMPONENTE
-        case 'perfil': return <AdminProfile />; 
-        
+        case 'perfil': return <div className="p-6">Perfil de Administrador</div>;
         default: return <AdminDashboard onNavigate={handleNavigate} />;
       }
     }
