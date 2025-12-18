@@ -17,7 +17,7 @@ export interface ApiResponse<T = any> {
 
 // 1. CREA LA INSTANCIA
 const httpClient: AxiosInstance = axios.create({
-  baseURL: API_CONFIG.BASE_URL,
+  baseURL: 'http://localhost:8000/api',
   timeout: API_CONFIG.TIMEOUT,
   headers: API_CONFIG.HEADERS,
 });
