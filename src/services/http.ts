@@ -17,7 +17,7 @@ export interface ApiResponse<T = any> {
 
 // 1. CREA LA INSTANCIA
 const httpClient: AxiosInstance = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: 'https://anakondita.com/api',
   timeout: API_CONFIG.TIMEOUT,
   headers: API_CONFIG.HEADERS,
 });
