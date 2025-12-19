@@ -1,14 +1,23 @@
-// --- Roles (Corregidos según tu SQL) ---
+// ============================================================================
+// SISTEMA DE CITAS MÉDICAS - TIPOS GLOBALES
+// ============================================================================
+
+// --- ROLES Y PERMISOS ---
 export type UserRole = 'admin' | 'medico' | 'paciente';
 
-// --- (NUEVO) Interfaz para Especialidad ---
+// --- ESTADOS ---
+export type AppointmentStatus = 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'pendiente' | 'activa';
+
+// --- ENTIDADES BASE ---
+
+// 1. ESPECIALIDAD
 export interface Especialidad {
   id: number;
   nombre: string;
   descripcion: string;
 }
 
-// --- (NUEVO) Interfaz para Paciente (Datos de la tabla 'pacientes') ---
+// 2. PACIENTE (Datos anidados)
 export interface PacienteData {
   id: number;
   usuario_id: number | null;
@@ -19,19 +28,19 @@ export interface PacienteData {
   alergias?: string;
 }
 
-// --- (NUEVO) Interfaz para Medico (Datos de la tabla 'medicos') ---
+// 3. MÉDICO (Datos anidados)
 export interface MedicoData {
   id: number;
-  usuario_id: number | null; // (Corregido, tu API puede devolver null)
+  usuario_id: number | null;
   especialidad_id?: number;
   licencia_medica?: string;
   telefono_consultorio?: string;
   biografia?: string;
-  especialidad?: Especialidad; // (La relación cargada)
-  user?: User;
+  especialidad?: Especialidad;
+  user?: User; // Relación inversa si la API la carga
 }
 
-// --- Usuario (MODIFICADO con relaciones anidadas) ---
+// 4. USUARIO (Entidad Principal)
 export interface User {
   id: number;
   nombre: string;
@@ -43,17 +52,48 @@ export interface User {
   created_at: string;
   updated_at: string;
   
-  // --- RELACIONES ANIDADAS (de la API) ---
+  // Relaciones Anidadas
   paciente: PacienteData | null;
   medico: MedicoData | null;
   
-  // (Campos opcionales que ya tenías)
-  telefono?: string; // (Lo mantenemos por si acaso)
+  // Campos Legacy (por compatibilidad con código viejo si existe)
+  telefono?: string;
   especialidad?: string;
   numeroLicencia?: string; 
 }
 
-// --- (NUEVO) Interfaz para las Estadísticas de CADA médico ---
+// 5. CITA (APPOINTMENT)
+export interface Appointment {
+  id: number;
+  fecha_hora_inicio: string; // ISO 8601
+  fecha_hora_fin?: string;
+  estado: AppointmentStatus;
+  motivo_consulta?: string;
+  
+  // Relación Médico
+  medico: {
+    id: number;
+    nombre_completo: string;
+    telefono_consultorio?: string;
+    // Soporte dual: Objeto (nuevo) o String (viejo/error)
+    especialidad: {
+      id: number;
+      nombre: string;
+    } | string;
+  };
+  
+  // Relación Paciente
+  paciente: {
+    id: number;
+    nombre_completo: string;
+  };
+}
+
+// ============================================================================
+// MÓDULOS ESPECÍFICOS
+// ============================================================================
+
+// --- MÓDULO: DIRECTORIO DE MÉDICOS ---
 export interface DoctorIndividualStats {
   citas_totales: number;
   citas_completadas: number;
@@ -61,10 +101,9 @@ export interface DoctorIndividualStats {
   pacientes_atendidos: number;
 }
 
-// --- (NUEVO) Interfaz para el Directorio de Médicos (basado en tu JSON) ---
 export interface DoctorDirectoryItem {
   id_medico: number;
-  id_usuario: number | null; // <-- El problema de tu API está aquí
+  id_usuario: number | null;
   nombre_completo: string;
   email: string;
   licencia_medica: string;
@@ -75,20 +114,97 @@ export interface DoctorDirectoryItem {
     nombre: string;
   };
   estadisticas: DoctorIndividualStats;
-  
-  // (Esta propiedad 'usuario' es la que TU API DEBERÍA enviar para que Editar/Eliminar funcionen)
   usuario?: User; 
 }
 
-// --- (NUEVO) Interfaz para las Tarjetas de Stats de Médicos ---
-export interface DoctorStats {
-  totalMedicos: number;
-  totalEspecialidades: number; // (Corregido de tu JSON)
-  totalCitas: number;          // (Corregido de tu JSON)
-  totalPacientesAtendidos: number; // (Corregido de tu JSON)
+// --- MÓDULO: PACIENTE (DASHBOARD & HISTORIAL) ---
+export interface PatientDashboardStats {
+  resumen: {
+    citas_programadas: number;
+    historial_completado: number;
+  };
+  proxima_cita: {
+    id: number;
+    fecha_hora_inicio: string;
+    estado: string; 
+    motivo_consulta: string;
+    medico: {
+      id: number;
+      nombre_completo: string;
+      especialidad: {
+        id: number;
+        nombre: string;
+      } | string;
+    };
+  } | null;
 }
 
-// --- Paginación ---
+export interface MedicalRecord {
+  id: number;
+  fecha: string;
+  diagnostico: string;
+  tratamiento: string;
+  notas?: string;
+  archivos_adjuntos?: boolean;
+  medico: {
+    nombre: string;
+    especialidad: string | { nombre: string }; // Soporte flexible
+  };
+}
+
+export interface PatientClinicalProfile {
+  tipo_sangre: string;
+  edad: number;
+  alergias: string;
+  condiciones_cronicas: string;
+  altura?: string; 
+  peso?: string;   
+}
+
+// --- MÓDULO: ADMIN (DASHBOARD & GESTIÓN) ---
+export interface AdminDashboardStats {
+  // Usuarios
+  totalPacientes: number;
+  totalMedicos: number;
+  
+  // Citas
+  totalCitas: number;
+  citasHoy: number;
+  
+  // Desglose Estados
+  citasActivas: number;
+  citasPendientes: number;
+  citasConfirmadas: number;
+  citasCompletadas: number;
+  citasCanceladas: number;
+  
+  // KPIs
+  tasaCompletacion: number;
+  tasaCancelacion: number;
+  
+  // Compatibilidad (Si usas campos antiguos en algún lado)
+  total_pacientes?: number;
+  total_medicos?: number;
+  total_citas?: number;
+  citas_hoy?: number;
+  citas_pendientes?: number;
+  medicos_activos?: number;
+}
+
+export interface RecentAppointment {
+  id: number;
+  fecha_hora_inicio: string;
+  estado: AppointmentStatus;
+  motivo_consulta: string;
+  paciente: { id: number; nombre_completo: string; };
+  medico: { id: number; nombre_completo: string; };
+}
+
+// ============================================================================
+// PAYLOADS Y RESPUESTAS DE API
+// ============================================================================
+
+// --- PAGINACIÓN ---
 export interface PaginatedResponse<T> {
   data: T[];
   links: { 
@@ -105,94 +221,19 @@ export interface PaginatedResponse<T> {
     per_page: number;
     to: number;
     total: number;
-    stats_generales?: DoctorStats; // (Stats para el módulo de médicos)
-  };
-}
-
-// --- Interfaz para las Stats de Usuarios ---
-export interface UserStats {
-  total_usuarios: number;
-  pacientes: number;
-  medicos: number;
-  administradores: number;
-}
-
-// --- Tipos de Estado de Citas ---
-export type AppointmentStatus = 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'pendiente' | 'activa';
-
-// --- Interfaz para Citas Recientes (Dashboard de Admin) ---
-export interface RecentAppointment {
-  id: number;
-  fecha_hora_inicio: string;
-  fecha_hora_fin: string;
-  estado: AppointmentStatus;
-  motivo_consulta: string;
-  notas_paciente: string | null;
-  paciente: { id: number; nombre_completo: string; };
-  medico: { 
-    id: number; 
-    // (Acepta un string O el objeto MedicoData (el error de tu API))
-    nombre_completo: string | MedicoData; 
-  };
-}
-
-// --- Interfaz para Stats (Dashboard de Admin) ---
-// (Coincide con tu JSON de /dashboard-stats)
-export interface AdminDashboardStats {
-  totalPacientes: number;
-  totalMedicos: number;
-  citasHoy: number;
-  citasPendientes: number;
-  citasCompletadas: number;
-  tasaCompletacion: number;
-  tasaCancelacion: number;
-  totalCitas: number;
-  citasEsteMes: number;
-  nuevosUsuarios: number;
-  citasRecientes: RecentAppointment[];
-}
-// --- Interfaz de Cita (Completa) ---
-// (Esta era la que tenías duplicada, la he borrado y dejado una sola)
-export interface Appointment {
-  id: number;
-  fecha_hora_inicio: string;
-  fecha_hora_fin?: string;
-  estado: AppointmentStatus;
-  motivo_consulta?: string;
-  
-  // Estructura actualizada según el Backend
-  medico: {
-    id: number;
-    nombre_completo: string;
-    telefono_consultorio?: string;
-    // 👇 AHORA ES UN OBJETO, NO UN STRING O NULL
-    especialidad: {
-      id: number;
-      nombre: string;
+    // Stats opcionales que a veces vienen en meta
+    stats_generales?: {
+        totalMedicos: number;
+        totalEspecialidades: number;
+        totalCitas: number;
+        totalPacientesAtendidos: number;
     };
   };
-  
-  paciente: {
-    id: number;
-    nombre_completo: string;
-  };
 }
 
-// --- Tipos de Autenticación ---
-export type LoginCredentials = { 
-  email: string, 
-  password: string 
-};
+// --- AUTH & USUARIOS ---
+export type LoginCredentials = { email: string, password: string };
 
-export interface RegisterData {
-  nombre: string;
-  apellidos: string;
-  email: string;
-  password: string;
-  password_confirmation: string;
-}
-
-// --- Tipos de CRUD de Usuarios (Formularios) ---
 export interface CreateUserData {
   nombre: string;
   apellidos: string;
@@ -200,15 +241,13 @@ export interface CreateUserData {
   password: string;
   password_confirmation: string;
   rol: UserRole;
-  
-  // Campos de Paciente
+  // Paciente
   fecha_nacimiento?: string;
   telefono?: string;
   direccion?: string;
   tipo_sangre?: string;
   alergias?: string;
-  
-  // Campos de Médico
+  // Médico
   especialidad_id?: number;
   licencia_medica?: string;
   telefono_consultorio?: string;
@@ -220,7 +259,6 @@ export interface UpdateUserData extends Omit<CreateUserData, 'password' | 'passw
   rol?: UserRole;
 }
 
-// --- Otros Tipos ---
 export interface ChangePasswordData { 
   current_password?: string;
   password: string;
@@ -233,11 +271,24 @@ export interface UserFilters {
   q?: string;
   rol?: UserRole;
   activo?: boolean;
-  especialidad_id?: number; // Para filtrar médicos por especialidad
+  especialidad_id?: number;
 }
 
-// --- (¡AÑADIDOS!) Tipos de Reportes que faltaban ---
-// (Estos los importa 'reports.service.ts')
+// --- CITAS (OPERACIONES) ---
+export interface CreateAppointmentPayload {
+  medico_id: number;
+  paciente_id: number; 
+  fecha: string; 
+  hora: string;  
+  motivo: string;
+}
+
+export interface AvailableSlotsResponse {
+  fecha: string;
+  slots: string[];
+}
+
+// --- REPORTES ---
 export interface ReportFilters {
   fecha_inicio?: string;
   fecha_fin?: string;
@@ -245,86 +296,9 @@ export interface ReportFilters {
   paciente_id?: number;
 }
 
-export interface AppointmentsByDate {
-  fecha: string;
-  total: number;
-}
-
-export interface AppointmentsByStatus {
-  estado: string;
-  total: number;
-}
-
-export interface DoctorPerformance {
-  medico_id: number;
-  nombre_medico: string;
-  total_citas: number;
-  citas_completadas: number;
-}
-
-export interface PatientStatistics {
-  nuevos_pacientes: number;
-  total_pacientes: number;
-}
-
-export interface RevenueReport {
-  mes: string;
-  total_ingresos: number;
-}
-
-export interface PatientDashboardStats {
-  resumen: {
-    citas_programadas: number;
-    historial_completado: number;
-  };
-  proxima_cita: {
-    id: number;
-    fecha_hora_inicio: string;
-    estado: string; // "programada"
-    motivo_consulta: string;
-    medico: {
-      id: number;
-      nombre_completo: string;
-      // 👇 IMPORTANTE: Ahora es un objeto
-      especialidad: {
-        id: number;
-        nombre: string;
-      };
-    };
-  } | null;
-}
-export interface AvailableSlotsResponse {
-  fecha: string;
-  slots: string[]; // Array de horas ["09:00", "09:30", ...]
-}
-
-export interface CreateAppointmentPayload {
-  medico_id: number;
-  paciente_id: number; // <-- ¡NUEVO CAMPO OBLIGATORIO!
-  fecha: string; 
-  hora: string;  
-  motivo: string;
-}
-export interface MedicalRecord {
-  id: number;
-  fecha: string; // YYYY-MM-DD
-  diagnostico: string;
-  tratamiento: string;
-  notas?: string;
-  archivos_adjuntos?: boolean; // Para saber si mostrar botón de descarga
-  
-  // Relación con médico (puede venir anidada)
-  medico: {
-    nombre: string; // o nombre_completo
-    especialidad: string; // o especialidad.nombre
-  };
-}
-export interface PatientClinicalProfile {
-  tipo_sangre: string;
-  edad: number;
-  alergias: string;
-  condiciones_cronicas: string;
-  // Campos opcionales (si no están en tu BD, mostraremos '-')
-  altura?: string; 
-  peso?: string;   
-}
+export interface AppointmentsByDate { fecha: string; total: number; }
+export interface AppointmentsByStatus { estado: string; total: number; }
+export interface DoctorPerformance { medico_id: number; nombre_medico: string; total_citas: number; citas_completadas: number; }
+export interface PatientStatistics { nuevos_pacientes: number; total_pacientes: number; }
+export interface RevenueReport { mes: string; total_ingresos: number; }
+export interface UserStats { total_usuarios: number; pacientes: number; medicos: number; administradores: number; }
