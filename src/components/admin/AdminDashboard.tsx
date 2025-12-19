@@ -133,9 +133,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Actividad del Sistema</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => onNavigate('reportes')}>
-                Ver Reporte
-              </Button>
+
             </div>
           </CardHeader>
           <CardContent>

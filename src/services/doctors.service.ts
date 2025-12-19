@@ -123,6 +123,24 @@ export const doctorService = {
     }
   },
 
+  // --- NUEVO: Función para crear médico ---
+create: async (data: any) => {
+    // CORRECCIÓN FINAL: Usamos 'users'
+    // Al enviar el rol 'doctor', el backend debería crear al usuario y su perfil médico.
+    // Laravel suele esperar 'name', así que aseguramos que vaya ese campo.
+    const payload = {
+        ...data,
+        name: data.nombre, // Mapeamos nombre a name por si acaso
+        password_confirmation: data.password // A veces Laravel pide confirmar
+    };
+    
+    const response = await http.post('users', payload);
+    return response.data;
+  },
+  delete: async (id: number) => {
+    await http.delete(`medicos/${id}`);
+  },
+
   confirmAppointment: async (id: number) => { await http.put(`citas/${id}`, { estado: 'confirmada' }); },
   rejectAppointment: async (id: number) => { await http.put(`citas/${id}`, { estado: 'cancelada' }); }
 };
