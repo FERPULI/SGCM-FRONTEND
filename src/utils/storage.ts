@@ -14,7 +14,7 @@ let lastLoginTimestamp = 0;
 
 export const storage = {
   // --- SET TOKEN (Protegido) ---
-  setToken: (token: string) => {
+  setAccessToken: (token: string) => {
     if (!token) return;
     localStorage.setItem(KEYS.TOKEN, token);
     localStorage.setItem('access_token', token);
@@ -24,34 +24,87 @@ export const storage = {
     console.log("✅ Token guardado. Sistema blindado por 5 segundos.");
   },
 
+  /**
+   * Obtener token de acceso
+   */
   getAccessToken: (): string | null => {
     return localStorage.getItem(KEYS.TOKEN) || 
            localStorage.getItem('access_token') || 
            localStorage.getItem('token');
   },
 
-  // --- SET USER ---
-  setUser: (user: any) => {
-    if (!user) return;
-    localStorage.setItem(KEYS.USER, JSON.stringify(user));
+  /**
+   * Guardar token de refresco (legacy compatibility)
+   */
+  setRefreshToken: (token: string): void => {
+    if (token) localStorage.setItem('refresh_token', token);
   },
 
-  getUser: () => {
+  /**
+   * Obtener token de refresco
+   */
+  getRefreshToken: (): string | null => {
+    return localStorage.getItem('refresh_token');
+  },
+
+  /**
+   * Guardar datos del usuario
+   */
+  setUserData: (userData: any): void => {
+    if (!userData) return;
+    localStorage.setItem(KEYS.USER, JSON.stringify(userData));
+  },
+
+  /**
+   * Obtener datos del usuario
+   */
+  getUserData: (): any | null => {
     const data = localStorage.getItem(KEYS.USER);
-    try { return data ? JSON.parse(data) : null; } catch { return null; }
+    if (!data) {
+      // Fallback: intentar con key legacy
+      const legacyData = localStorage.getItem('user_data');
+      return legacyData ? JSON.parse(legacyData) : null;
+    }
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
   },
 
-  // --- LIMPIEZA (AQUÍ ESTÁ EL TRUCO) ---
-  clear: () => {
-    // Si han pasado menos de 5 segundos desde el login, IGNORAMOS la orden de borrar.
+  /**
+   * Guardar rol del usuario
+   */
+  setUserRole: (role: string): void => {
+    if (role) localStorage.setItem(KEYS.ROLE, role);
+  },
+
+  /**
+   * Obtener rol del usuario
+   */
+  getUserRole: (): string | null => {
+    return localStorage.getItem(KEYS.ROLE) || localStorage.getItem('user_role');
+  },
+
+  /**
+   * Limpiar todos los datos almacenados (logout) - PROTEGIDO
+   */
+  clear: (): void => {
+    // Si han pasado menos de 5 segundos desde el login, IGNORAMOS la orden de borrar
     if (Date.now() - lastLoginTimestamp < 5000) {
       console.warn("🛡️ BLINDAJE ACTIVADO: Se intentó borrar la sesión justo después del login. BLOQUEADO.");
-      // Imprimimos quién intentó borrarlo para que lo sepas (opcional)
       console.trace("¿Quién llamó a clear()?"); 
       return; 
     }
 
     localStorage.clear();
     console.log("🧹 Storage limpio y sesión cerrada (Acción legítima).");
-  }
+  },
+
+  /**
+   * Verificar si el usuario está autenticado
+   */
+  isAuthenticated: (): boolean => {
+    return !!storage.getAccessToken();
+  },
 };
