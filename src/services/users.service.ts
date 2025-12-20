@@ -1,5 +1,5 @@
 /**
- * Servicio de Usuarios (Simplificado)
+ * Servicio de Usuarios (Compatible con paginación)
  */
 
 import { http } from './http';
@@ -19,32 +19,71 @@ export interface User {
 }
 
 export const usersService = {
-  // Obtener todos los usuarios
-  getAll: async () => {
+  // Obtener usuarios con filtros y paginación
+  getUsers: async (filters?: any) => {
     try {
-      const response = await http.get<User[]>('users');
+      const response = await http.get('users', { params: filters });
       
-      // Manejo flexible de la respuesta (por si viene paginada o directa)
-      if ((response.data as any).data && Array.isArray((response.data as any).data)) {
-         return (response.data as any).data;
-      } else if (Array.isArray(response.data)) {
-         return response.data;
+      // Si viene paginada (con meta y data)
+      if (response.data?.data && response.data?.meta) {
+        return response.data;
       }
-      return [];
+      
+      // Si viene como array directo, la convertimos a formato paginado
+      if (Array.isArray(response.data)) {
+        return {
+          data: response.data,
+          meta: {
+            current_page: 1,
+            from: 1,
+            last_page: 1,
+            per_page: response.data.length,
+            to: response.data.length,
+            total: response.data.length
+          },
+          links: {
+            first: null,
+            last: null,
+            prev: null,
+            next: null
+          }
+        };
+      }
+      
+      // Respuesta vacía por defecto
+      return {
+        data: [],
+        meta: {
+          current_page: 1,
+          from: 0,
+          last_page: 1,
+          per_page: 10,
+          to: 0,
+          total: 0
+        },
+        links: {
+          first: null,
+          last: null,
+          prev: null,
+          next: null
+        }
+      };
     } catch (error) {
       console.error("Error fetching users:", error);
-      return [];
+      throw error;
     }
   },
 
-  // Obtener usuarios con filtros (legacy compatibility)
-  getUsers: async (filters?: any) => {
-    return usersService.getAll();
-  },
-
-  // Obtener estadísticas (Si no tienes endpoint, retorna null)
+  // Obtener estadísticas de usuarios
   getUserStats: async () => {
-    return null; 
+    try {
+      const response = await http.get('users/counts');
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching user stats:", error);
+      // Retornar null si no existe el endpoint
+      return null; 
+    }
   },
 
   createUser: async (userData: any) => {
