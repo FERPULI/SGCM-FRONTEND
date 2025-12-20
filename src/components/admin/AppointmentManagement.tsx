@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../ui/dialog"; // Agregué Description para quitar el warning
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { StatusBadge } from "../shared/StatusBadge";
 import { Cita, Especialidad } from "../../types"; 
-import { Plus, Edit, Trash2, Loader2, AlertCircle, Calendar as CalendarIcon, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, AlertCircle, Calendar as CalendarIcon, Eye, Clock, User, FileText } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
@@ -23,24 +23,22 @@ import { especialidadService } from "../../services/especialidad.service";
 import { patientsService, PatientDirectoryItem } from "../../services/patients.service"; 
 
 export function AppointmentManagement() {
-  // Estados de Datos
   const [appointments, setAppointments] = useState<Cita[]>([]);
   const [doctors, setDoctors] = useState<DoctorDirectoryItem[]>([]);
   const [specialties, setSpecialties] = useState<Especialidad[]>([]);
   const [patients, setPatients] = useState<PatientDirectoryItem[]>([]); 
   
-  // Estados de UI
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("todas");
-  const [showDialog, setShowDialog] = useState(false);
   
-  // Estado para Edición
+  const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [viewingAppointment, setViewingAppointment] = useState<Cita | null>(null);
 
-  // Estado del Formulario
   const [formData, setFormData] = useState({
     patientId: "",
     doctorId: "",
@@ -52,23 +50,34 @@ export function AppointmentManagement() {
 
   useEffect(() => { loadData(); }, []);
 
-  const loadData = async () => {
+const loadData = async () => {
     setIsLoading(true);
     try {
       const [citasRes, medicosRes, espRes, pacRes] = await Promise.all([
-        appointmentsService.getAppointments({ per_page: 100 }), // Usamos tu filtro
+        // Pedimos muchas para evitar paginación oculta
+        appointmentsService.getAppointments({ per_page: 300 }), 
         doctorsService.getAll(),
         especialidadService.getAll(),
         patientsService.getAll()
       ]);
 
-      // Adaptamos la respuesta paginada de tu servicio a un array simple para la tabla
-      const listaCitas = citasRes.data || []; 
-      setAppointments(listaCitas);
+      const listaCitas = (citasRes as any).data || (Array.isArray(citasRes) ? citasRes : []);
+      
+      // --- CORRECCIÓN DE ORDENAMIENTO ---
+      // Forzamos a que la ID más alta (la última creada) aparezca primera en la tabla
+      const citasOrdenadas = Array.isArray(listaCitas) 
+        ? [...listaCitas].sort((a: Cita, b: Cita) => Number(b.id) - Number(a.id)) 
+        : [];
+      
+      setAppointments(citasOrdenadas); // Guardamos la lista ya ordenada
 
-      setDoctors(Array.isArray(medicosRes) ? medicosRes : []);
-      setSpecialties(Array.isArray(espRes) ? espRes : []);
-      setPatients(Array.isArray(pacRes) ? pacRes : []);
+      // ... resto de la carga (médicos, pacientes, etc.) ...
+      const listaMedicos = (medicosRes as any).data || (Array.isArray(medicosRes) ? medicosRes : []);
+      setDoctors(Array.isArray(listaMedicos) ? listaMedicos : []);
+      const listaEsp = (espRes as any).data || (Array.isArray(espRes) ? espRes : []);
+      setSpecialties(Array.isArray(listaEsp) ? listaEsp : []);
+      const listaPacientes = (pacRes as any).data || (Array.isArray(pacRes) ? pacRes : []);
+      setPatients(Array.isArray(listaPacientes) ? listaPacientes : []);
 
     } catch (error) {
       console.error(error);
@@ -78,7 +87,6 @@ export function AppointmentManagement() {
     }
   };
 
-  // --- ESTADÍSTICAS ---
   const stats = {
     total: appointments.length,
     activas: appointments.filter(a => a.estado === 'programada' || a.estado === 'confirmada').length,
@@ -87,121 +95,128 @@ export function AppointmentManagement() {
     canceladas: appointments.filter(a => a.estado === 'cancelada').length,
   };
 
-  // --- ABRIR MODAL CREAR ---
   const openCreateDialog = () => {
     setEditingId(null); 
     setFormData({ patientId: "", doctorId: "", date: undefined, time: "", reason: "", status: "programada" });
     setShowDialog(true);
   };
 
-  // --- ABRIR MODAL EDITAR (LÓGICA CONECTADA) ---
-// --- ABRIR MODAL EDITAR (CORREGIDO) ---
   const handleEditClick = (cita: Cita) => {
     setEditingId(cita.id); 
-    
-    // Parsear fecha para el formulario
     const fechaStr = cita.fecha_hora_inicio || cita.fecha || "";
     const fechaObj = new Date(fechaStr);
-    
-    // Extraer hora
     let horaStr = "";
     if (cita.hora) {
         horaStr = cita.hora.substring(0, 5);
     } else if (isValid(fechaObj)) {
         horaStr = format(fechaObj, "HH:mm");
     }
-
-    // BLINDAJE DE MOTIVO: Buscamos en todos los campos posibles y aseguramos que no sea null
     const motivoReal = cita.motivo || cita.motivo_consulta || "";
-
     setFormData({
         patientId: cita.paciente_id?.toString() || cita.paciente?.id?.toString() || "",
         doctorId: cita.medico_id?.toString() || cita.medico?.id?.toString() || "",
         date: isValid(fechaObj) ? fechaObj : undefined,
         time: horaStr,
-        reason: motivoReal, // Aquí cargamos el motivo existente
+        reason: motivoReal, 
         status: cita.estado || "programada"
     });
-    
     setShowDialog(true);
   };
 
-  // --- ELIMINAR CITA (CONECTADO A TU SERVICIO) ---
+  const handleViewClick = (cita: Cita) => {
+    setViewingAppointment(cita);
+    setShowViewDialog(true);
+  };
+
   const handleDeleteClick = async (id: number) => {
     if (!window.confirm("¿Estás seguro de eliminar esta cita?")) return;
-
     try {
-        // Llamada a tu servicio deleteAppointment
         await appointmentsService.deleteAppointment(id);
         toast.success("Cita eliminada correctamente");
-        loadData();
+        // Actualizamos la lista localmente para que desaparezca al instante
+        setAppointments(prev => prev.filter(c => c.id !== id));
     } catch (error) {
         console.error("Error eliminando:", error);
         toast.error("No se pudo eliminar la cita");
     }
   };
 
-  // --- GUARDAR (CREAR O ACTUALIZAR) ---
-// --- GUARDAR (CREAR O ACTUALIZAR) ---
-  const handleSaveAppointment = async () => {
+  // --- FUNCIÓN GUARDAR OPTIMIZADA ---
+  const handleSaveAppointment = async (e: React.MouseEvent) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+
     if (!formData.patientId || !formData.doctorId || !formData.date || !formData.time) {
-      toast.error("Faltan campos obligatorios (Paciente, Médico, Fecha u Hora)");
+      toast.error("Faltan campos obligatorios");
       return;
     }
 
     setIsSubmitting(true);
     try {
       const fechaFormat = format(formData.date, "yyyy-MM-dd");
-      
-      // TRUCO ANTI-ERROR 422:
-      // Si el motivo está vacío, enviamos un texto por defecto para que sea un 'string' válido.
-      const motivoSeguro = formData.reason && formData.reason.trim() !== "" 
-                           ? formData.reason 
-                           : "Consulta General"; 
+      const motivoSeguro = formData.reason && formData.reason.trim() !== "" ? formData.reason : "Consulta General"; 
 
       if (editingId) {
-        // --- ACTUALIZAR ---
-        await appointmentsService.updateAppointment(editingId, {
+        // ACTUALIZAR
+        const updatedCita = await appointmentsService.updateAppointment(editingId, {
             fecha: fechaFormat,
             hora: formData.time,
-            motivo_consulta: motivoSeguro, // Usamos la variable segura
+            motivo_consulta: motivoSeguro,
             estado: formData.status as any
         });
-        toast.success("Cita actualizada correctamente");
+        
+        // Actualizamos la lista localmente
+        setAppointments(prev => prev.map(c => c.id === editingId ? updatedCita : c));
+        toast.success("Cita actualizada");
       } else {
-        // --- CREAR ---
-        await appointmentsService.createAppointment({
-            medico_id: parseInt(formData.doctorId),
-            paciente_id: parseInt(formData.patientId),
+        // CREAR
+        const newCita = await appointmentsService.createAppointment({
+            medico_id: formData.doctorId,   
+            paciente_id: formData.patientId, 
             fecha: fechaFormat,
             hora: formData.time,
-            motivo: motivoSeguro // Usamos la variable segura
+            motivo: motivoSeguro
         });
-        toast.success("Cita creada correctamente");
+
+        // --- TRUCO DE VISIBILIDAD ---
+        // Insertamos la nueva cita AL PRINCIPIO de la lista visualmente
+        // Esto garantiza que la veas aunque el backend la ponga al final.
+        if (newCita && newCita.id) {
+             setAppointments(prev => [newCita, ...prev]);
+             toast.success("Cita creada correctamente");
+        } else {
+             // Si el backend no devolvió el objeto completo, recargamos
+             toast.success("Cita creada. Actualizando lista...");
+             loadData();
+        }
       }
 
       setShowDialog(false);
-      loadData(); 
+
     } catch (error: any) {
-      console.error(error);
-      // Mejor manejo de errores para saber qué pasa
-      if (error.response && error.response.data) {
-          const data = error.response.data;
-          if (data.message) toast.error(`Error: ${data.message}`);
-          if (data.errors) {
-              // Muestra el primer error de validación que encuentre
-              const firstKey = Object.keys(data.errors)[0];
-              toast.error(`${firstKey}: ${data.errors[firstKey][0]}`);
+      console.error("❌ Error al guardar:", error);
+      if (error.response) {
+          const s = error.response.status;
+          if (s === 422) {
+             const data = error.response.data;
+             if(data.errors) {
+                 const firstError = Object.values(data.errors)[0];
+                 toast.error(`Error: ${firstError}`);
+             } else {
+                 toast.error("Datos inválidos");
+             }
+          } else {
+             toast.error(`Error del servidor (${s})`);
           }
       } else {
-          toast.error("Error al guardar la cita");
+          toast.error("Error de conexión");
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- Helpers UI ---
+  // Helpers de visualización (Sin cambios)
   const getSpecialtyName = (medicoIdInCita: number) => {
     if (!medicoIdInCita) return "Sin Médico";
     let doctor = doctors.find(d => {
@@ -230,6 +245,29 @@ export function AppointmentManagement() {
     if (d.user && d.user.nombre) return `${d.user.nombre} ${d.user.apellidos || ''}`;
     if (d.nombre) return `${d.nombre} ${d.apellidos || ''}`;
     return `Médico #${d.id}`;
+  };
+
+  const getPatientNameForDisplay = (cita: Cita) => {
+     if(cita.paciente?.nombre_completo) return cita.paciente.nombre_completo;
+     const found = patients.find(p => p.id === cita.paciente_id || (p as any).id_paciente === cita.paciente_id);
+     return found ? getPatientName(found) : "Desconocido";
+  };
+
+  const getDoctorNameForDisplay = (cita: Cita) => {
+    if(cita.medico?.nombre_completo) return cita.medico.nombre_completo;
+    const found = doctors.find(d => {
+        const dAny = d as any;
+        const dId = dAny.id || dAny.id_medico;
+        return dId === cita.medico_id;
+    });
+    return found ? getDoctorDisplayName(found) : "Desconocido";
+  };
+
+  const getDoctorSpecialtyForDisplay = (cita: Cita) => {
+    const med = cita.medico as any;
+    if (med && med.especialidad && med.especialidad.nombre) return med.especialidad.nombre;
+    if (med && med.especialidad_nombre) return med.especialidad_nombre;
+    return getSpecialtyName(cita.medico_id || med?.id || 0);
   };
 
   const filteredAppointments = appointments.filter(cita => {
@@ -287,12 +325,15 @@ export function AppointmentManagement() {
                     <TableRow key={cita.id}>
                         <TableCell className="font-medium">{cita.paciente?.nombre_completo || "Desconocido"}</TableCell>
                         <TableCell>{cita.medico?.nombre_completo || "No asignado"}</TableCell>
-                        <TableCell><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{getSpecialtyName(cita.medico?.id || 0)}</span></TableCell>
+                        <TableCell><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{getDoctorSpecialtyForDisplay(cita)}</span></TableCell>
                         <TableCell>{safeFormat(cita.fecha_hora_inicio, "d MMMM yyyy")}</TableCell>
                         <TableCell>{safeFormat(cita.fecha_hora_inicio, "HH:mm")}</TableCell>
                         <TableCell><StatusBadge status={cita.estado} /></TableCell>
                         <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleViewClick(cita)}>
+                                    <Eye className="h-4 w-4 text-gray-600 hover:text-gray-900" />
+                                </Button>
                                 <Button variant="ghost" size="sm" onClick={() => handleEditClick(cita)}>
                                     <Edit className="h-4 w-4 text-gray-600 hover:text-blue-600" />
                                 </Button>
@@ -311,9 +352,16 @@ export function AppointmentManagement() {
         </CardContent>
       </Card>
       
+      {/* MODAL CREAR/EDITAR */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>{editingId ? "Editar Cita" : "Nueva Cita"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+              <DialogTitle>{editingId ? "Editar Cita" : "Nueva Cita"}</DialogTitle>
+              {/* Added DialogDescription to fix console warning */}
+              <DialogDescription>
+                {editingId ? "Modifique los detalles de la cita existente." : "Complete el formulario para agendar una nueva cita médica."}
+              </DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-6 py-4">
             <div className="space-y-2">
               <Label>Paciente</Label>
@@ -335,10 +383,10 @@ export function AppointmentManagement() {
                 <SelectTrigger><SelectValue placeholder="Seleccionar médico" /></SelectTrigger>
                 <SelectContent>
                   {doctors.map(d => {
-                     const docAny = d as any;
-                     const idReal = docAny.id || docAny.id_medico || docAny.user_id;
-                     if (!idReal) return null;
-                     return <SelectItem key={idReal} value={idReal.toString()}>{getDoctorDisplayName(docAny)}</SelectItem>;
+                      const docAny = d as any;
+                      const idReal = docAny.id || docAny.id_medico || docAny.user_id;
+                      if (!idReal) return null;
+                      return <SelectItem key={idReal} value={idReal.toString()}>{getDoctorDisplayName(docAny)}</SelectItem>;
                   })}
                 </SelectContent>
               </Select>
@@ -386,11 +434,87 @@ export function AppointmentManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
-            <Button className="bg-blue-600" onClick={handleSaveAppointment} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+            <Button type="button" className="bg-blue-600" onClick={handleSaveAppointment} disabled={isSubmitting}>
               {isSubmitting ? "Guardando..." : (editingId ? "Actualizar" : "Crear")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* MODAL VER DETALLES */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-md">
+            <DialogHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-xl">Detalles de la Cita</DialogTitle>
+                    {/* Added DialogDescription here too */}
+                    <DialogDescription>
+                        Información completa del registro médico.
+                    </DialogDescription>
+                </div>
+                {viewingAppointment && <StatusBadge status={viewingAppointment.estado} />}
+            </DialogHeader>
+
+            {viewingAppointment && (
+                <div className="space-y-4 py-2">
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex justify-between items-center">
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-medium text-blue-900 mb-1">Información de la Cita</h4>
+                            <div className="flex items-center text-blue-700">
+                                <CalendarIcon className="h-4 w-4 mr-2" />
+                                <span className="text-sm font-medium">{safeFormat(viewingAppointment.fecha_hora_inicio, "EEEE, d 'de' MMMM 'de' yyyy")}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center text-blue-700 mt-5">
+                            <Clock className="h-4 w-4 mr-2" />
+                            <span className="text-sm font-medium">{safeFormat(viewingAppointment.fecha_hora_inicio, "HH:mm")}</span>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-3">Información del Paciente</h4>
+                        <div className="flex items-center">
+                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                                <User className="h-5 w-5 text-gray-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Nombre</p>
+                                <p className="text-sm font-medium text-gray-900">{getPatientNameForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-3">Información del Médico</h4>
+                        <div className="flex items-center mb-3">
+                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                                <User className="h-5 w-5 text-gray-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Nombre</p>
+                                <p className="text-sm font-medium text-gray-900">{getDoctorNameForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                             <div className="h-10 w-10 flex items-center justify-center mr-3">
+                                <FileText className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Especialidad</p>
+                                <p className="text-sm font-medium text-gray-900">{getDoctorSpecialtyForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-2">Motivo de la Consulta</h4>
+                        <p className="text-sm text-gray-700">
+                            {viewingAppointment.motivo || viewingAppointment.motivo_consulta || "Sin motivo especificado"}
+                        </p>
+                    </div>
+                </div>
+            )}
         </DialogContent>
       </Dialog>
     </div>

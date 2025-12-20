@@ -1,20 +1,12 @@
-/**
- * Servicio de Citas Médicas
- * Conecta con el backend Laravel y adapta los tipos
- */
-
-import { http, ApiResponse } from './http';
+import { http } from './http';
 import { API_ENDPOINTS } from '../config/api';
-// Importamos 'Cita' porque es la interfaz real que coincide con la BD
-import { Cita, AppointmentStatus, PaginatedResponse } from '../types';
-
-// --- DTOs (Data Transfer Objects) para enviar datos ---
+import { Cita, PaginatedResponse, AppointmentStatus } from '../types';
 
 export interface CreateAppointmentPayload {
-  medico_id: number;
-  paciente_id?: number; // Opcional si el backend lo toma del token
-  fecha: string;        // "YYYY-MM-DD"
-  hora: string;         // "HH:mm"
+  medico_id: number | string;
+  paciente_id: number | string;
+  fecha: string; // YYYY-MM-DD
+  hora: string;  // HH:mm
   motivo: string;
 }
 
@@ -23,20 +15,8 @@ export interface UpdateAppointmentData {
   hora?: string;
   motivo_consulta?: string;
   estado?: AppointmentStatus;
-  notas_paciente?: string;
 }
 
-// Filtros mapeados a query params de Laravel
-export interface AppointmentFilters {
-  page?: number;
-  per_page?: number;
-  estado?: AppointmentStatus; // Backend espera 'estado', no 'status'
-  medico_id?: number;
-  paciente_id?: number;
-  fecha?: string;
-}
-
-// Objeto vacío seguro
 const emptyPaginatedResponse: PaginatedResponse<Cita> = {
   data: [],
   links: { first: null, last: null, prev: null, next: null },
@@ -45,14 +25,30 @@ const emptyPaginatedResponse: PaginatedResponse<Cita> = {
 
 export const appointmentsService = {
   /**
-   * Obtener lista de citas
+   * 1. Obtener citas (SOLICITANDO ORDEN DESCENDENTE)
    */
-  getAppointments: async (filters?: AppointmentFilters): Promise<PaginatedResponse<Cita>> => {
+  getAppointments: async (filters?: any): Promise<PaginatedResponse<Cita>> => {
     try {
+      // Intentamos forzar al servidor a darnos las más nuevas primero y muchas (300)
+      const params = { 
+          ...filters, 
+          per_page: 300, 
+          sort_by: 'desc', // Intentos comunes de ordenamiento
+          order: 'desc',
+          orderBy: 'id'
+      };
+
       const response = await http.get<PaginatedResponse<Cita>>(
-        API_ENDPOINTS.APPOINTMENTS.LIST,
-        { params: filters }
+        API_ENDPOINTS.APPOINTMENTS.LIST, 
+        { params }
       );
+      
+      // Manejo flexible de la respuesta
+      if (response.data && (response.data as any).data && Array.isArray((response.data as any).data)) {
+         return response.data;
+      } else if (Array.isArray(response.data)) {
+         return { ...emptyPaginatedResponse, data: response.data as any };
+      }
       return response.data || emptyPaginatedResponse;
     } catch (error) {
       console.error("Error al obtener citas:", error);
@@ -60,115 +56,68 @@ export const appointmentsService = {
     }
   },
 
-  /**
-   * Obtener una cita por ID
-   */
   getAppointmentById: async (id: number): Promise<Cita | null> => {
     try {
-      // Laravel apiResource devuelve { data: { ...objeto } }
-      const response = await http.get<{ data: Cita }>(
-        API_ENDPOINTS.APPOINTMENTS.GET(id)
-      );
-      return response.data.data;
-    } catch (error) {
-      console.error(`Error al obtener cita ${id}:`, error);
-      return null;
-    }
+      const response = await http.get<{ data: Cita }>(API_ENDPOINTS.APPOINTMENTS.GET(id));
+      return response.data.data || (response.data as any);
+    } catch (error) { return null; }
   },
 
   /**
-   * Crear nueva cita
-   * Traduce de {fecha, hora} -> {fecha_hora_inicio}
+   * 2. CREAR CITA (SOLUCIÓN QUIRÚRGICA)
+   * Enviamos formato SQL puro y duro. Es lo que menos falla.
    */
   createAppointment: async (data: CreateAppointmentPayload): Promise<Cita> => {
-    // 1. Calcular fecha inicio
+    // Construcción manual de fechas YYYY-MM-DD HH:mm:ss
     const fechaInicio = `${data.fecha} ${data.hora}:00`;
     
-    // 2. Calcular fecha fin (Asumimos 30 min por defecto si el usuario no lo define)
-    // Esto es opcional, depende de si tu backend lo calcula automáticamente.
-    // Lo enviamos para asegurar que el campo required de BD se llene.
-    const fechaDate = new Date(fechaInicio);
-    fechaDate.setMinutes(fechaDate.getMinutes() + 30);
-    const fechaFin = fechaDate.toISOString().slice(0, 19).replace('T', ' ');
+    // Calculamos fin (+30 min)
+    const d = new Date(`${data.fecha}T${data.hora}:00`);
+    d.setMinutes(d.getMinutes() + 30);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fechaFin = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
     const payload = {
-      medico_id: data.medico_id,
-      paciente_id: data.paciente_id,
+      medico_id: Number(data.medico_id),
+      paciente_id: Number(data.paciente_id),
+      // Campos de fecha estándar
       fecha_hora_inicio: fechaInicio,
-      fecha_hora_fin: fechaFin, // Enviamos fin calculado
+      fecha_hora_fin: fechaFin,
+      // Campos redundantes pero seguros (sin cambiar nombres)
       motivo_consulta: data.motivo,
-      estado: 'programada' // Estado inicial por defecto
+      estado: 'programada'
     };
+
+    console.log("🚀 Payload Limpio:", payload);
 
     const response = await http.post<{ data: Cita }>(
       API_ENDPOINTS.APPOINTMENTS.CREATE,
       payload
     );
     
-    return response.data.data;
+    return response.data.data || (response.data as any);
   },
 
-  /**
-   * Actualizar cita
-   */
   updateAppointment: async (id: number, data: UpdateAppointmentData): Promise<Cita> => {
-    // Convertimos datos parciales si es necesario
     const payload: any = { ...data };
-    
-    // Si viene fecha y hora nuevas, reconstruimos el datetime
     if (data.fecha && data.hora) {
         payload.fecha_hora_inicio = `${data.fecha} ${data.hora}:00`;
-        // Recalcular fin...
+        delete payload.fecha;
+        delete payload.hora;
     }
-
-    const response = await http.put<{ data: Cita }>(
-      API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      payload
-    );
-    return response.data.data;
+    const response = await http.put(API_ENDPOINTS.APPOINTMENTS.UPDATE(id), payload);
+    return (response.data as any).data || response.data;
   },
 
-  /**
-   * Eliminar cita
-   */
   deleteAppointment: async (id: number): Promise<void> => {
     await http.delete(API_ENDPOINTS.APPOINTMENTS.DELETE(id));
   },
 
-  /**
-   * Cancelar cita (Shortcut)
-   */
   cancelAppointment: async (id: number, reason?: string): Promise<Cita> => {
-    // En Laravel apiResource, PUT a /citas/{id} es lo estándar
     const response = await http.put<{ data: Cita }>(
       API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      { 
-        estado: 'cancelada',
-        notas_paciente: reason ? `Motivo cancelación: ${reason}` : undefined
-      }
+      { estado: 'cancelada', notas_paciente: reason }
     );
-    return response.data.data;
-  },
-
-  /**
-   * Obtener horarios disponibles
-   */
-  getAvailableSlots: async (medicoId: number, date: string): Promise<string[]> => {
-    try {
-      // Espera query params: ?medico_id=1&fecha=2023-10-01
-      const response = await http.get<{ slots: string[] }>( // Ajusta según tu API
-        API_ENDPOINTS.APPOINTMENTS.AVAILABLE_SLOTS,
-        { params: { medico_id: medicoId, fecha: date } }
-      );
-      
-      // Valida que sea array
-      if (response.data && Array.isArray(response.data.slots)) {
-        return response.data.slots;
-      }
-      return [];
-    } catch (error) {
-      console.error("Error fetching slots:", error);
-      return [];
-    }
-  },
+    return response.data.data || (response.data as any);
+  }
 };
