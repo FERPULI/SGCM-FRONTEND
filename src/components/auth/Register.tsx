@@ -11,7 +11,7 @@ interface RegisterProps {
 }
 
 export function Register({ onRegister, onNavigateToLogin }: RegisterProps) {
-  // Estado modificado para coincidir con la BD (nombre, apellidos)
+  // Estado con los campos correctos para la BD
   const [formData, setFormData] = useState({
     nombre: "",
     apellidos: "",
@@ -22,11 +22,21 @@ export function Register({ onRegister, onNavigateToLogin }: RegisterProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validación de contraseñas
     if (formData.password !== formData.password_confirmation) {
       alert("Las contraseñas no coinciden");
       return;
     }
-    // Pasa el objeto 'formData' (que ahora es correcto) a App.tsx
+    
+    // Validación de longitud mínima
+    if (formData.password.length < 6) {
+      alert("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+    
+    // Envía los datos al servicio de registro
+    // El backend debe crear registros en User y Paciente
     onRegister(formData);
   };
 

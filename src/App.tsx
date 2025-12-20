@@ -62,11 +62,19 @@ export default function App() {
   const handleLogout = () => { authService.logout(); setCurrentUser(null); setCurrentPage('inicio'); setAuthView('login'); };
 
   const handleRegister = async (data: any) => {
-    setError(null); setIsLoading(true);
+    setError(null); 
+    setIsLoading(true);
     try {
-      const response = await authService.register({ ...data, role: 'patient' }); 
-      setCurrentUser(response.user); setCurrentPage('inicio');
-    } catch (error: any) { setError(error.message || "Error en el registro"); } finally { setIsLoading(false); }
+      // El servicio authService.register enviará los datos al backend
+      // Backend debe crear registros en User y Paciente con el mismo ID
+      const response = await authService.register(data); 
+      setCurrentUser(response.user); 
+      setCurrentPage('inicio');
+    } catch (error: any) { 
+      setError(error.message || "Error en el registro"); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const handleNavigate = (page: string) => setCurrentPage(page);

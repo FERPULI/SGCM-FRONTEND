@@ -215,13 +215,24 @@ export interface LoginCredentials {
   password: string;
 }
 
+/**
+ * Datos para registro de nuevo paciente
+ * El backend debe crear registros en:
+ * 1. Tabla 'users' con estos datos base
+ * 2. Tabla 'pacientes' con el mismo ID de usuario
+ */
 export interface RegisterData {
-  name: string;
+  nombre: string;
+  apellidos: string;
   email: string;
   password: string;
   password_confirmation: string;
-  role: UserRole;
-  phone?: string;
+  rol?: UserRole; // Por defecto 'paciente'
+  telefono?: string;
+  fecha_nacimiento?: string;
+  direccion?: string;
+  tipo_sangre?: string;
+  alergias?: string;
 }
 
 export interface CreateAppointmentPayload {

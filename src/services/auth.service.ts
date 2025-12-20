@@ -50,36 +50,56 @@ export const authService = {
   },
 
   /**
-   * Registrar nuevo usuario (¡FUNCIÓN AÑADIDA!)
+   * Registrar nuevo paciente
+   * El backend debe:
+   * 1. Crear el registro en la tabla 'users' con estos datos
+   * 2. Crear automáticamente un registro en la tabla 'pacientes' con el mismo ID
+   * 3. Devolver el token de autenticación y los datos completos del usuario
    */
   register: async (data: RegisterData): Promise<SanctumAuthResponse> => {
     
-    // 1. Preparamos los datos EXACTOS que tu API/SQL espera
+    // 1. Preparamos los datos para crear Usuario y Paciente
     const registerData = {
-      ...data, // nombre, apellidos, email, password, password_confirmation
-      rol: 'paciente',
+      nombre: data.nombre,
+      apellidos: data.apellidos,
+      email: data.email,
+      password: data.password,
+      password_confirmation: data.password_confirmation,
+      rol: data.rol || 'paciente', // Por defecto paciente
       activo: true,
-      device_name: 'web-browser'
+      device_name: 'web-browser',
+      // Datos opcionales del paciente
+      ...(data.telefono && { telefono: data.telefono }),
+      ...(data.fecha_nacimiento && { fecha_nacimiento: data.fecha_nacimiento }),
+      ...(data.direccion && { direccion: data.direccion }),
+      ...(data.tipo_sangre && { tipo_sangre: data.tipo_sangre }),
+      ...(data.alergias && { alergias: data.alergias }),
     };
 
     try {
-      // 2. Llamamos al endpoint de registro
+      // 2. Llamamos al endpoint de registro (/api/auth/register)
+      //    El backend debe crear el User y el Paciente con el mismo ID
       const response = await http.post<SanctumAuthResponse>(
-        API_ENDPOINTS.AUTH.REGISTER, // Asegúrate que esta ruta exista en config/api.ts
+        API_ENDPOINTS.AUTH.REGISTER,
         registerData
       );
       
       const { token, user } = response.data;
       
-      // 3. Si el registro funciona, logueamos al usuario
+      // 3. Si el registro es exitoso, guardamos la sesión
       storage.setAccessToken(token);
       storage.setUserData(user);
-      storage.setUserRole(user.role);
+      storage.setUserRole(user.rol);
+      
+      // 4. Verificar que se creó el registro de paciente
+      if (!user.paciente) {
+        console.warn('ADVERTENCIA: El usuario se creó pero no tiene registro de paciente asociado');
+      }
       
       return response.data;
 
     } catch (error: any) {
-      // 4. 'handleApiError' mostrará si "el email ya existe", etc.
+      // Manejo de errores: email duplicado, validación, etc.
       throw new Error(handleApiError(error));
     }
   },
