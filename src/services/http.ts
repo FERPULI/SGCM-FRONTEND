@@ -1,13 +1,11 @@
 /**
- * Cliente HTTP con Axios (Simplificado para Laravel Sanctum)
- * (CORREGIDO: Se exporta la instancia 'httpClient' directamente)
+ * Cliente HTTP con Axios (Simplificado)
  */
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { API_CONFIG, HTTP_STATUS } from '../config/api';
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import { API_CONFIG } from '../config/api';
 import { storage } from '../utils/storage';
-import { toast } from 'sonner'; // (Asegúrate de tener 'sonner' instalado)
+import { toast } from 'sonner';
 
-// (Tus interfaces ApiResponse, etc.)
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -15,18 +13,22 @@ export interface ApiResponse<T = any> {
   errors?: Record<string, string[]>;
 }
 
-// 1. CREA LA INSTANCIA
+// Crear instancia de Axios
 const httpClient: AxiosInstance = axios.create({
   baseURL: API_CONFIG.BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
   headers: API_CONFIG.HEADERS,
+  withCredentials: false, // Cambiar a false si tienes problemas de CORS
 });
 
 /**
- * 2. Interceptor de Petición (Añade el token)
+ * Interceptor de Petición (Añade el token)
  */
 httpClient.interceptors.request.use(
   (config) => {
+    // Debug: ver la URL completa que se está llamando
+    console.log('🔵 HTTP Request:', config.method?.toUpperCase(), config.baseURL + config.url);
+    
     const token = storage.getAccessToken(); 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -37,14 +39,23 @@ httpClient.interceptors.request.use(
 );
 
 /**
- * 3. Interceptor de Respuesta (Maneja 401)
+ * Interceptor de Respuesta (Maneja errores)
  */
 httpClient.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response) => response,
   async (error: AxiosError) => {
     
-    // Si el error es 401 (No autorizado / Token inválido)
-    if (error.response?.status === HTTP_STATUS.UNAUTHORIZED) {
+    // Error de red (backend no disponible)
+    if (!error.response) {
+      console.error('❌ Error de red - Backend no disponible:', error.message);
+      toast.error('Error de conexión', {
+        description: 'No se puede conectar con el servidor. Verifica que el backend esté corriendo en http://localhost:8000',
+      });
+      return Promise.reject(error);
+    }
+    
+    // Si el error es 401 (No autorizado)
+    if (error.response?.status === 401) {
       console.error('No autorizado. Token inválido o expirado.');
       
       // Evita bucles si el 401 vino del login
@@ -55,16 +66,17 @@ httpClient.interceptors.response.use(
         });
         
         setTimeout(() => {
-          window.location.href = '/'; // (Usar '/' es más seguro que '/login')
+          window.location.href = '/';
         }, 1500);
       }
     }
 
-    // (Tu otro manejo de errores 403, 404, 422, 500 está bien)
-    if (error.response?.status === HTTP_STATUS.FORBIDDEN) {
+    if (error.response?.status === 403) {
       console.error('Acceso denegado (403).');
+      toast.error('No tienes permiso para realizar esta acción');
     }
-    if (error.response?.status === HTTP_STATUS.UNPROCESSABLE_ENTITY) {
+
+    if (error.response?.status === 422) {
       console.error('Error de validación (422):', error.response.data);
     }
 
@@ -73,7 +85,7 @@ httpClient.interceptors.response.use(
 );
 
 /**
- * 4. Helper de Errores (sin cambios)
+ * Helper de Errores
  */
 export const handleApiError = (error: any): string => {
   if (axios.isAxiosError(error)) {
@@ -93,7 +105,4 @@ export const handleApiError = (error: any): string => {
   return 'Ocurrió un error inesperado.';
 };
 
-// 5. (MODIFICADO) Exporta la instancia 'httpClient' como 'http'
-//    para que tus otros servicios ('auth.service.ts', 'users.service.ts')
-//    no tengan que cambiar su import.
 export const http = httpClient;

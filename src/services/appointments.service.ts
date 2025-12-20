@@ -120,11 +120,10 @@ export const appointmentsService = {
   },
 
   /**
-   * Cancelar cita
+   * Cancelar cita (usa DELETE físico)
    */
   cancelAppointment: async (id: number, reason?: string): Promise<boolean> => {
     try {
-        // Usamos DELETE físico según tu configuración original
         await http.delete(API_ENDPOINTS.APPOINTMENTS.DELETE(id));
         return true;
     } catch (error) {
@@ -140,7 +139,6 @@ export const appointmentsService = {
     const response = await http.post<ApiResponse<Appointment>>(
       API_ENDPOINTS.APPOINTMENTS.CONFIRM(id)
     );
-    // El ! al final fuerza a TS a confiar en que existe, pero idealmente valida
     return response.data?.data!;
   },
 
@@ -159,8 +157,10 @@ export const appointmentsService = {
    * Reprogramar cita
    */
   rescheduleAppointment: async (id: number, newDate: string, newTime: string): Promise<Appointment> => {
+    // Asegurarnos de que el formato de hora sea correcto (HH:MM:SS)
     let formattedTime = newTime.trim();
     
+    // Si el formato es "HH:MM", agregar ":00"
     if (formattedTime.match(/^\d{2}:\d{2}$/)) {
       formattedTime = `${formattedTime}:00`;
     }
@@ -182,6 +182,8 @@ export const appointmentsService = {
       payload
     );
     
+    console.log('Respuesta completa de reprogramación:', response);
+    
     if (!response.data?.data) {
       throw new Error("La API no devolvió la cita reprogramada.");
     }
@@ -191,6 +193,7 @@ export const appointmentsService = {
 
   /**
    * Obtener horarios disponibles
+   * Devuelve un array de strings ['09:00', '09:30', ...]
    */
   getAvailableSlots: async (medicoId: number, date: string): Promise<string[]> => {
     try {

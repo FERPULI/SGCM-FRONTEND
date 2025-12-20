@@ -1,6 +1,5 @@
 /**
  * Configuración de la API
- * (VERSIÓN CORREGIDA: Rutas en Español para Citas)
  */
 
 export const API_CONFIG = {
