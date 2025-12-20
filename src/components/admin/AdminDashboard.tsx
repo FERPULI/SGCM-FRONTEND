@@ -1,78 +1,105 @@
-import { useEffect, useState } from "react";
-// Importación universal del servicio HTTP
-import * as httpService from "../../services/http"; 
-const api = (httpService as any).http || (httpService as any).default || (httpService as any).api || (httpService as any).axios;
+// src/components/admin/AdminDashboard.tsx
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Users, Stethoscope, Calendar, Clock, Activity, TrendingUp, UserPlus, CheckCircle2, AlertCircle, FileText, Loader2 } from "lucide-react";
+import { Button } from "../ui/button";
+import { Users, Calendar, UserCog, Activity, TrendingUp, AlertCircle, CheckCircle2, Stethoscope, Clock, FileText, UserPlus, Loader2 } from "lucide-react";
+import { AdminDashboardStats, AppointmentStatus } from "../../types"; 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
+import { Badge } from "../ui/badge";
+import { reportsService } from '../../services/reports.service';
+import { handleApiError } from '../../services/http';
+import { toast } from 'sonner';
 
-// --- INTERFACES ---
-interface DashboardStats {
-  totalPacientes: number;
-  totalMedicos: number;
-  citasHoy: number;
-  citasPendientes: number;
-  citasCompletadas: number;
-  citasCanceladas: number;
-  tasaCompletacion: number;
-  tasaCancelacion: number;
-  totalCitas: number;
-  citasEsteMes: number;
-  nuevosUsuarios: number; 
-}
-
-// Mantenemos las props originales para evitar conflictos con tu router
 interface AdminDashboardProps {
-  onNavigate?: (page: string) => void;
+  onNavigate: (page: string) => void;
 }
+
+// --- Funciones Helper ---
+const formatDate = (isoString: string) => {
+  if (!isoString) return '-';
+  return new Date(isoString).toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+const formatTime = (isoString: string) => {
+  if (!isoString) return '-';
+  return new Date(isoString).toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const getStatusVariant = (status: AppointmentStatus): "default" | "secondary" | "outline" | "destructive" => {
+  switch (status) {
+    case 'completada': return 'outline';
+    case 'confirmada':
+    case 'activa': return 'default';
+    case 'programada':
+    case 'pendiente': return 'secondary';
+    case 'cancelada': return 'destructive';
+    default: return 'secondary';
+  }
+};
 
 // --- COMPONENTE PRINCIPAL ---
 export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const loadDashboardData = async () => {
       console.log("🔄 Iniciando carga del Dashboard...");
       try {
-        if (!api) {
-            console.error("❌ No se encontró la instancia de API (httpService)");
-            return;
-        }
-
-        const response = await api.get('/dashboard-stats');
-        console.log("✅ Datos recibidos del Dashboard:", response.data);
+        setIsLoading(true);
+        setError(null);
         
-        // Asignamos directamente la respuesta del JSON
-        setStats(response.data);
+        const statsData = await reportsService.getDashboardStats();
+        console.log("✅ Datos recibidos del Dashboard:", statsData);
+        setStats(statsData);
 
-      } catch (error) {
-        console.error("❌ Error cargando estadísticas:", error);
+      } catch (err) {
+        console.error("❌ Error cargando estadísticas:", err);
+        const errorMsg = handleApiError(err);
+        setError(errorMsg);
+        toast.error(`Error: ${errorMsg}`);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
-    fetchStats();
+    loadDashboardData();
   }, []);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-[50vh] w-full items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-            <p className="text-gray-500 text-sm">Cargando métricas...</p>
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+          <p className="text-gray-500 text-sm">Cargando métricas...</p>
         </div>
       </div>
     );
   }
 
-  // Valores por defecto seguros (evita pantalla blanca si stats es null)
-  const data = stats || {
-    totalPacientes: 0, totalMedicos: 0, citasHoy: 0, citasPendientes: 0,
-    citasCompletadas: 0, citasCanceladas: 0, tasaCompletacion: 0, tasaCancelacion: 0,
-    totalCitas: 0, citasEsteMes: 0, nuevosUsuarios: 0
-  };
+  if (error) {
+    return <div className="p-6 text-red-500">Error al cargar el dashboard: {error}</div>;
+  }
+
+  if (!stats) {
+    return <div className="p-6">No se pudieron cargar las estadísticas.</div>;
+  }
 
   return (
     <div className="p-6 space-y-6 animate-in fade-in duration-500">
@@ -84,33 +111,34 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
       {/* KPI CARDS (FILA 1) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
+        <StatCardComponent 
           title="Total Pacientes" 
-          value={data.totalPacientes} 
+          value={stats.totalPacientes} 
           icon={Users} 
           subtext="Pacientes registrados"
           colorIcon="text-blue-600"
           bgIcon="bg-blue-100"
+          trend={stats.nuevosUsuarios > 0 ? `+${stats.nuevosUsuarios} este mes` : undefined}
         />
-        <StatCard 
+        <StatCardComponent 
           title="Total Médicos" 
-          value={data.totalMedicos} 
+          value={stats.totalMedicos} 
           icon={Stethoscope} 
           subtext="Médicos activos"
           colorIcon="text-indigo-600"
           bgIcon="bg-indigo-100"
         />
-        <StatCard 
+        <StatCardComponent 
           title="Citas Hoy" 
-          value={data.citasHoy} 
+          value={stats.citasHoy} 
           icon={Calendar} 
           subtext="Programadas para hoy"
           colorIcon="text-emerald-600"
           bgIcon="bg-emerald-100"
         />
-        <StatCard 
+        <StatCardComponent 
           title="Pendientes" 
-          value={data.citasPendientes} 
+          value={stats.citasPendientes} 
           icon={Clock} 
           subtext="Requieren atención"
           colorIcon="text-orange-600"
@@ -134,7 +162,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div>
                 <p className="text-sm font-medium text-gray-500">Citas Completadas</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{data.citasCompletadas}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.citasCompletadas}</p>
               </div>
               <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
@@ -145,34 +173,34 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               {/* Tasa Completación */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <Activity className="h-4 w-4 text-gray-400" />
                     <span className="text-sm text-gray-600">Tasa de Completación</span>
-                    </div>
-                    <span className="font-bold text-gray-900">{data.tasaCompletacion}%</span>
+                  </div>
+                  <span className="font-bold text-gray-900">{stats.tasaCompletacion.toFixed(0)}%</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                    <div 
+                  <div 
                     className="bg-green-500 h-full rounded-full transition-all duration-1000 ease-out" 
-                    style={{ width: `${data.tasaCompletacion}%` }}
-                    ></div>
+                    style={{ width: `${stats.tasaCompletacion}%` }}
+                  ></div>
                 </div>
               </div>
 
               {/* Tasa Cancelación */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-gray-400" />
                     <span className="text-sm text-gray-600">Tasa de Cancelación</span>
-                    </div>
-                    <span className="font-bold text-gray-900">{data.tasaCancelacion}%</span>
+                  </div>
+                  <span className="font-bold text-gray-900">{stats.tasaCancelacion.toFixed(0)}%</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                    <div 
+                  <div 
                     className="bg-red-500 h-full rounded-full transition-all duration-1000 ease-out" 
-                    style={{ width: `${data.tasaCancelacion}%` }}
-                    ></div>
+                    style={{ width: `${stats.tasaCancelacion}%` }}
+                  ></div>
                 </div>
               </div>
             </div>
@@ -189,34 +217,94 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
             <QuickStatItem 
               icon={FileText} 
               label="Total Histórico de Citas" 
-              value={data.totalCitas} 
+              value={stats.totalCitas} 
               color="text-blue-600"
               bg="bg-blue-100"
             />
             <QuickStatItem 
               icon={TrendingUp} 
               label="Citas este Mes" 
-              value={data.citasEsteMes} 
+              value={stats.citasEsteMes} 
               color="text-purple-600"
               bg="bg-purple-100"
             />
             <QuickStatItem 
               icon={UserPlus} 
               label="Nuevos Usuarios (Mes)" 
-              value={data.nuevosUsuarios} 
+              value={stats.nuevosUsuarios} 
               color="text-orange-600"
               bg="bg-orange-100"
             />
           </CardContent>
         </Card>
       </div>
+
+      {/* TABLA DE CITAS RECIENTES */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Citas Recientes</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => onNavigate('citas')}>
+              Ver Todas
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Paciente</TableHead>
+                  <TableHead>Médico</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Hora</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stats.citasRecientes.length > 0 ? (
+                  stats.citasRecientes.map((appointment) => (
+                    <TableRow key={appointment.id}>
+                      <TableCell className="font-medium">
+                        {appointment.paciente.nombre_completo}
+                      </TableCell>
+                      <TableCell>
+                        {typeof appointment.medico.nombre_completo === 'string' 
+                          ? appointment.medico.nombre_completo 
+                          : 'N/A'}
+                      </TableCell>
+                      <TableCell>{formatDate(appointment.fecha_hora_inicio)}</TableCell>
+                      <TableCell>{formatTime(appointment.fecha_hora_inicio)}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(appointment.estado)} className="capitalize">
+                          {appointment.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm">Ver</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      No hay citas recientes registradas.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 // --- SUBCOMPONENTES ---
 
-function StatCard({ title, value, icon: Icon, subtext, colorIcon, bgIcon }: any) {
+function StatCardComponent({ title, value, icon: Icon, subtext, colorIcon, bgIcon, trend }: any) {
   return (
     <Card className="shadow-sm border-gray-200 hover:shadow-md transition-shadow duration-200">
       <CardContent className="p-6">
@@ -230,9 +318,8 @@ function StatCard({ title, value, icon: Icon, subtext, colorIcon, bgIcon }: any)
           </div>
         </div>
         <div className="mt-4 flex items-center">
-            {/* Pequeño indicador visual */}
-           <div className="h-2 w-2 rounded-full bg-gray-300 mr-2"></div>
-           <span className="text-xs text-gray-400">{subtext}</span>
+          <div className="h-2 w-2 rounded-full bg-gray-300 mr-2"></div>
+          <span className="text-xs text-gray-400">{trend || subtext}</span>
         </div>
       </CardContent>
     </Card>

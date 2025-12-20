@@ -1,36 +1,46 @@
-name: Desplegar Frontend React ⚛️
+name: Deploy Frontend to cPanel
 
 on:
   push:
-    branches: [ "rama-fernandez", "main" ]  
+    branches:
+      - main
+
 jobs:
-  build-and-deploy:
-    name: 🏗️ Build & Deploy
+  web-deploy:
+    name: 🎉 Deploy Frontend
     runs-on: ubuntu-latest
     steps:
-    - name: 🚚 Obtener código
+    - name: 🚚 Get latest code
       uses: actions/checkout@v4
 
-    - name: 🟢 Configurar Node.js
+    - name: 🟢 Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20' # Versión estable actual
+        node-version: '18'
 
-    - name: 📦 Instalar dependencias
+    - name: 📦 Install Dependencies
       run: npm install
 
-    - name: 🔨 Construir proyecto (Build)
-      run: npm run build
-      # Esto creará una carpeta 'dist' (o 'build') con tus archivos listos.
+    - name: 🏗️ Build Project
+      # CORRECCIÓN 1: Asegúrate que este nombre (VITE_API_URL) coincida con tu api.ts
+      # Nota: Aquí SÍ lleva el /api al final para producción
+      run: VITE_API_URL=https://anakondita.com/api npm run build
 
-    - name: 📂 Subir a HostinPeru (FTP)
+    - name: 📂 Sync files to Hosting
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        # ⚠️ IMPORTANTE: Aquí le decimos que suba SÓLO la carpeta construida
-        # ...
-        # Para Vite la carpeta SIEMPRE es ./dist/
-        local-dir: build/
+        username: ${{ secrets.FTP_FRONTEND_USERNAME }}
+        password: ${{ secrets.FTP_FRONTEND_PASSWORD }}
+        
+        # CORRECCIÓN 2: Vite suele usar 'dist'. Si tu carpeta es 'build', cámbialo.
+        local-dir: ./build/
         server-dir: ./
+        
+        # CORRECCIÓN 3 (VITAL): Protegemos la carpeta api para que no la borre
+        exclude: |
+          **/.git*
+          **/node_modules/**
+          api/**
+          cgi-bin/**
+          .well-known/**

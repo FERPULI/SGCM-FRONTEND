@@ -9,15 +9,17 @@ import { PatientCalendar } from "./components/patient/PatientCalendar";
 import { MedicalHistory } from "./components/patient/MedicalHistory";
 import { PatientProfile } from "./components/patient/PatientProfile";
 
+// [SOLUCIÓN DEL ERROR] IMPORTACIÓN CON LLAVES
 import { DoctorDashboard } from "./components/doctor/DoctorDashboard"; 
+
 import { DoctorAppointments } from "./components/doctor/DoctorAppointments";
 import { DoctorCalendar } from "./components/doctor/DoctorCalendar";
 import { PatientDetails } from "./components/doctor/PatientDetails";
 import { DoctorProfile } from "./components/doctor/DoctorProfile";
-
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
 import { AppointmentManagement } from "./components/admin/AppointmentManagement"; 
+import { Reports } from "./components/admin/Reports"; 
 import { Settings } from "./components/admin/Settings"; 
 import { DoctorManagement } from "./components/admin/DoctorManagement";
 // [NUEVO] Importamos el perfil de administrador
@@ -118,6 +120,7 @@ export default function App() {
         case 'usuarios': return <UserManagement />; 
         case 'medicos': return <DoctorManagement />;
         case 'citas': return <AppointmentManagement />; 
+        case 'reportes': return <Reports />;
         case 'configuracion': return <Settings />;
         
         // [NUEVO] Aquí conectamos el perfil nuevo

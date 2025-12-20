@@ -433,7 +433,6 @@ const loadData = async () => {
               <Textarea placeholder="Describa el motivo..." value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})}/>
             </div>
           </div>
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
             <Button type="button" className="bg-blue-600" onClick={handleSaveAppointment} disabled={isSubmitting}>
@@ -519,11 +518,5 @@ const loadData = async () => {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function StatCard({ title, value, color = "text-gray-900" }: { title: string, value: number, color?: string }) {
-  return (
-    <Card><CardContent className="pt-6 flex flex-col items-center justify-center p-4"><p className={`text-3xl font-bold ${color}`}>{value}</p><p className="text-sm font-medium text-gray-500 mt-1">{title}</p></CardContent></Card>
   );
 }
