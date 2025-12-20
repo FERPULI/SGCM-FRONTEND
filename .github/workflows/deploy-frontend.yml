@@ -16,25 +16,31 @@ jobs:
     - name: 🟢 Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18' # O la versión que uses (20, etc.)
+        node-version: '18'
 
     - name: 📦 Install Dependencies
       run: npm install
 
     - name: 🏗️ Build Project
-      # AQUÍ OCURRE LA MAGIA: Conectamos React con tu Backend real
-      run: VITE_API_BASE_URL=https://anakondita.com/api npm run build
+      # CORRECCIÓN 1: Asegúrate que este nombre (VITE_API_URL) coincida con tu api.ts
+      # Nota: Aquí SÍ lleva el /api al final para producción
+      run: VITE_API_URL=https://anakondita.com/api npm run build
 
     - name: 📂 Sync files to Hosting
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
-        # OJO: Usamos los secretos NUEVOS del frontend
         username: ${{ secrets.FTP_FRONTEND_USERNAME }}
         password: ${{ secrets.FTP_FRONTEND_PASSWORD }}
         
-        # Subimos el contenido de la carpeta 'dist' (lo que generó el build)
-        local-dir: ./build/
-        
-        # Lo subimos a la raíz del usuario FTP (que ya configuramos como public_html)
+        # CORRECCIÓN 2: Vite suele usar 'dist'. Si tu carpeta es 'build', cámbialo.
+        local-dir: ./dist/
         server-dir: ./
+        
+        # CORRECCIÓN 3 (VITAL): Protegemos la carpeta api para que no la borre
+        exclude: |
+          **/.git*
+          **/node_modules/**
+          api/**
+          cgi-bin/**
+          .well-known/**
