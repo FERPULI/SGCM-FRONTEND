@@ -22,6 +22,7 @@ import { AppointmentManagement } from "./components/admin/AppointmentManagement"
 import { Reports } from "./components/admin/Reports"; 
 import { Settings } from "./components/admin/Settings"; 
 import { DoctorManagement } from "./components/admin/DoctorManagement";
+import { AdminProfile } from "./components/admin/AdminProfile";
 import { User } from "./types";
 import { Toaster } from "./components/ui/sonner";
 import { authService } from "./services/auth.service";
@@ -118,7 +119,7 @@ export default function App() {
         case 'citas': return <AppointmentManagement />; 
         case 'reportes': return <Reports />;
         case 'configuracion': return <Settings />;
-        case 'perfil': return <div className="p-6">Perfil de Administrador</div>;
+        case 'perfil': return <AdminProfile user={currentUser} />;
         default: return <AdminDashboard onNavigate={handleNavigate} />;
       }
     }
