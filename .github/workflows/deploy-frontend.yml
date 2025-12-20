@@ -34,7 +34,7 @@ jobs:
         password: ${{ secrets.FTP_FRONTEND_PASSWORD }}
         
         # CORRECCIÓN 2: Vite suele usar 'dist'. Si tu carpeta es 'build', cámbialo.
-        local-dir: ./dist/
+        local-dir: ./build/
         server-dir: ./
         
         # CORRECCIÓN 3 (VITAL): Protegemos la carpeta api para que no la borre
