@@ -1,46 +1,89 @@
 // src/types/index.ts
 
-// --- DEFINICIONES DE TIPOS BASE ---
+// --- ENUMS & CONSTANTS ---
+export type UserRole = 'admin' | 'medico' | 'paciente';
 
-// Roles de usuario (Incluye variantes en español para robustez)
-export type UserRole = 'admin' | 'doctor' | 'patient' | 'medico' | 'paciente';
-
-// Estados de la cita (Mapeados a los Badges visuales del Dashboard)
-// pending: Gris (Pendiente)
-// confirmed: Negro/Azul oscuro (Activa/Confirmada)
-// completed: Tachado/Gris (Completada)
-// cancelled: Rojo (Cancelada)
-export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
-
-// Genero
-export type Gender = 'male' | 'female' | 'other';
+// Valores exactos de tu constante ESTADOS en Cita.php
+export type AppointmentStatus = 'programada' | 'confirmada' | 'cancelada' | 'completada' | 'pendiente';
 
 // --- INTERFACES PRINCIPALES (Modelos Eloquent) ---
 
-// User interface (Base de autenticación)
+// 1. USUARIO (Base)
 export interface User {
   id: number;
-  name: string; // Nombre de usuario o display name
+  nombre: string;
+  apellidos: string;
   email: string;
-  phone?: string;
-  rol: UserRole; // [IMPORTANTE] Mapeado a 'rol' del backend
-  is_active: boolean;
-  email_verified_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  // Relaciones opcionales dependiendo de si se carga con 'with()'
-  patient?: Patient;
-  doctor?: Doctor;
+  rol: UserRole;
+  activo: boolean;
+  email_verified_at?: string;
+  created_at?: string;
+  
+  // Relaciones (Opcionales porque dependen del eager loading)
+  paciente?: Paciente;
+  medico?: Medico;
+  
+  // Legacy compatibility
+  name?: string;
+  role?: UserRole;
+  telefono?: string;
 }
 
-// Patient interface (Datos demográficos)
+// 2. PACIENTE (Perfil)
+export interface Paciente {
+  id: number;
+  usuario_id: number;
+  fecha_nacimiento: string;
+  telefono: string;
+  direccion: string;
+  tipo_sangre?: string;
+  alergias?: string;
+  nombre_completo?: string;
+    
+  // Relaciones
+  user?: User;
+  historiales_medicos?: HistorialMedico[];
+}
+
+// 3. MEDICO (Perfil)
+export interface Medico {
+  id: number;
+  usuario_id: number;
+  especialidad_id: number;
+  licencia_medica: string;
+  telefono_consultorio: string;
+  biografia?: string;
+  nombre_completo?: string;
+
+  user?: User;
+  especialidad?: Especialidad;
+}
+
+// 4. Especialidad
+export interface Especialidad {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+}
+
+// 5. HistorialMedico
+export interface HistorialMedico {
+  id: number;
+  paciente_id: number;
+  medico_id: number;
+  diagnostico: string;
+  tratamiento?: string;
+  created_at: string;
+}
+
+// Legacy Patient interface (compatibilidad)
 export interface Patient {
   id: number;
   user_id: number;
   first_name: string;
   last_name: string;
   date_of_birth: string;
-  gender: Gender;
+  gender?: string;
   address?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -49,10 +92,10 @@ export interface Patient {
   chronic_conditions?: string;
   created_at: string;
   updated_at: string;
-  user?: User; // Relación inversa
+  user?: User;
 }
 
-// Doctor interface (Datos profesionales)
+// Legacy Doctor interface (compatibilidad)
 export interface Doctor {
   id: number;
   user_id: number;
@@ -60,28 +103,43 @@ export interface Doctor {
   last_name: string;
   specialty: string;
   license_number: string;
-  years_of_experience: number;
+  years_of_experience?: number;
   education?: string;
   bio?: string;
   consultation_fee?: number;
-  is_available: boolean;
+  is_available?: boolean;
   created_at: string;
   updated_at: string;
-  user?: User; // Relación inversa
+  user?: User;
 }
 
-// Appointment interface (La Cita Médica)
-export interface Appointment {
+// Cita / Appointment
+export interface Cita {
   id: number;
-  patient_id: number;
-  doctor_id: number;
-  appointment_date: string; // DateTime string del backend (YYYY-MM-DD HH:mm:ss)
-  status: AppointmentStatus;
-  reason: string;
+  paciente_id: number;
+  medico_id: number;
+  fecha_hora_inicio: string;
+  fecha_hora_fin?: string;
+  estado: AppointmentStatus;
+  motivo_consulta: string;
+  notas_paciente?: string;
+
+  // Relaciones
+  paciente?: Paciente;
+  medico?: Medico;
+}
+
+// Appointment interface (alias compatible con Cita)
+export interface Appointment extends Cita {
+  patient_id?: number;
+  doctor_id?: number;
+  appointment_date?: string;
+  status?: AppointmentStatus;
+  reason?: string;
   notes?: string;
   cancellation_reason?: string;
   completion_notes?: string;
-  created_at: string;
+  created_at?: string;
   updated_at: string;
   
   // Relaciones cargadas (Eager Loading)
