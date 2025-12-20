@@ -34,7 +34,7 @@ jobs:
         password: ${{ secrets.FTP_FRONTEND_PASSWORD }}
         
         # Subimos el contenido de la carpeta 'dist' (lo que generó el build)
-        local-dir: ./dist/
+        local-dir: ./build/
         
         # Lo subimos a la raíz del usuario FTP (que ya configuramos como public_html)
         server-dir: ./
