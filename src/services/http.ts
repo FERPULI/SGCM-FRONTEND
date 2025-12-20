@@ -26,6 +26,9 @@ const httpClient: AxiosInstance = axios.create({
  */
 httpClient.interceptors.request.use(
   (config) => {
+    // Debug: ver la URL completa que se está llamando
+    console.log('🔵 HTTP Request:', config.method?.toUpperCase(), config.baseURL + config.url);
+    
     const token = storage.getAccessToken(); 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
