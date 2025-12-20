@@ -17,77 +17,6 @@ interface PatientProfileProps {
 }
 
 export function PatientProfile({ user }: PatientProfileProps) {
-    const handleSave = async () => {
-      try {
-        setIsLoading(true);
-        const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
-        if (!userData) {
-          toast.error("Error: No se encontró información del usuario");
-          return;
-        }
-        const parsedUser = JSON.parse(userData);
-        const pacienteId = parsedUser.paciente?.id || parsedUser.id;
-        if (!pacienteId) {
-          toast.error("No se encontró el ID del paciente");
-          return;
-        }
-
-        // Validar contraseñas si se están cambiando
-        if (passwordData.newPassword || passwordData.confirmPassword) {
-          if (passwordData.newPassword !== passwordData.confirmPassword) {
-            toast.error("Las contraseñas no coinciden");
-            setIsLoading(false);
-            return;
-          }
-          if (passwordData.newPassword.length < 6) {
-            toast.error("La contraseña debe tener al menos 6 caracteres");
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        const dataToUpdate: any = {
-          nombre: formData.nombre,
-          telefono: formData.telefono,
-          fecha_nacimiento: formData.fecha_nacimiento,
-          direccion: formData.direccion,
-          tipo_sangre: formData.tipo_sangre,
-        };
-
-        // Agregar contraseña si se está cambiando
-        if (passwordData.newPassword && passwordData.newPassword === passwordData.confirmPassword) {
-          dataToUpdate.password = passwordData.newPassword;
-          dataToUpdate.password_confirmation = passwordData.confirmPassword;
-        }
-
-        console.log("Datos a enviar:", dataToUpdate); // Debug
-        await patientService.updateProfile(pacienteId, dataToUpdate);
-        const updatedUser = {
-          ...parsedUser,
-          nombre: formData.nombre,
-          telefono: formData.telefono,
-          paciente: {
-            ...(parsedUser.paciente || {}),
-            telefono: formData.telefono,
-            fecha_nacimiento: formData.fecha_nacimiento,
-            direccion: formData.direccion,
-            tipo_sangre: formData.tipo_sangre,
-          }
-        };
-        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
-        
-        // Limpiar campos de contraseña
-        setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
-        
-        toast.success("✓ Perfil actualizado exitosamente");
-        setIsEditing(false);
-      } catch (error: any) {
-        console.error("Error al actualizar perfil:", error);
-        toast.error(error.response?.data?.message || "✗ Error al actualizar el perfil");
-      } finally {
-        setIsLoading(false);
-      }
-    };
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -139,6 +68,78 @@ export function PatientProfile({ user }: PatientProfileProps) {
       });
     }
   }, []);
+
+  const handleSave = async () => {
+    try {
+      setIsLoading(true);
+      const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+      if (!userData) {
+        toast.error("Error: No se encontró información del usuario");
+        return;
+      }
+      const parsedUser = JSON.parse(userData);
+      const pacienteId = parsedUser.paciente?.id || parsedUser.id;
+      if (!pacienteId) {
+        toast.error("No se encontró el ID del paciente");
+        return;
+      }
+
+      // Validar contraseñas si se están cambiando
+      if (passwordData.newPassword || passwordData.confirmPassword) {
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+          toast.error("Las contraseñas no coinciden");
+          setIsLoading(false);
+          return;
+        }
+        if (passwordData.newPassword.length < 6) {
+          toast.error("La contraseña debe tener al menos 6 caracteres");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      const dataToUpdate: any = {
+        nombre: formData.nombre,
+        telefono: formData.telefono,
+        fecha_nacimiento: formData.fecha_nacimiento,
+        direccion: formData.direccion,
+        tipo_sangre: formData.tipo_sangre,
+      };
+
+      // Agregar contraseña si se está cambiando
+      if (passwordData.newPassword && passwordData.newPassword === passwordData.confirmPassword) {
+        dataToUpdate.password = passwordData.newPassword;
+        dataToUpdate.password_confirmation = passwordData.confirmPassword;
+      }
+
+      console.log("Datos a enviar:", dataToUpdate); // Debug
+      await patientService.updateProfile(pacienteId, dataToUpdate);
+      const updatedUser = {
+        ...parsedUser,
+        nombre: formData.nombre,
+        telefono: formData.telefono,
+        paciente: {
+          ...(parsedUser.paciente || {}),
+          telefono: formData.telefono,
+          fecha_nacimiento: formData.fecha_nacimiento,
+          direccion: formData.direccion,
+          tipo_sangre: formData.tipo_sangre,
+        }
+      };
+      localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+      
+      // Limpiar campos de contraseña
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      
+      toast.success("✓ Perfil actualizado exitosamente");
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error("Error al actualizar perfil:", error);
+      toast.error(error.response?.data?.message || "✗ Error al actualizar el perfil");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getInitials = (nombre: string) => {
     return nombre
