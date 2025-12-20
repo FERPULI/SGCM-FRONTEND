@@ -124,7 +124,10 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         {/* PANEL IZQUIERDO: ACTIVIDAD */}
         <Card className="shadow-sm border-gray-200">
           <CardHeader>
-            <CardTitle className="text-lg font-medium text-gray-700">Actividad del Sistema</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Actividad del Sistema</CardTitle>
+
+            </div>
           </CardHeader>
           <CardContent className="space-y-6 pt-2">
             

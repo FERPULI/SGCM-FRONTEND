@@ -1,213 +1,123 @@
-/**
- * Servicio de Citas Médicas
- * Archivo: src/services/appointments.service.ts
- */
-
-import { http, ApiResponse } from './http';
+import { http } from './http';
 import { API_ENDPOINTS } from '../config/api';
-import { Appointment, AppointmentStatus, CreateAppointmentPayload, AvailableSlotsResponse } from '../types';
+import { Cita, PaginatedResponse, AppointmentStatus } from '../types';
 
-// --- Interfaces para el Payload de Actualización ---
+export interface CreateAppointmentPayload {
+  medico_id: number | string;
+  paciente_id: number | string;
+  fecha: string; // YYYY-MM-DD
+  hora: string;  // HH:mm
+  motivo: string;
+}
+
 export interface UpdateAppointmentData {
-  fecha_hora_inicio?: string;
+  fecha?: string;
+  hora?: string;
   motivo_consulta?: string;
   estado?: AppointmentStatus;
-  medico_id?: number;
-  paciente_id?: number;
-  notas_paciente?: string;
 }
 
-export interface AppointmentFilters {
-  page?: number;
-  per_page?: number;
-  status?: AppointmentStatus;
-  doctor_id?: number;
-  patient_id?: number;
-  date_from?: string;
-  date_to?: string;
-  search?: string;
-  estado?: string;
-  fecha?: string;
-  medico_id?: number;
-}
+const emptyPaginatedResponse: PaginatedResponse<Cita> = {
+  data: [],
+  links: { first: null, last: null, prev: null, next: null },
+  meta: { current_page: 1, from: 0, last_page: 1, per_page: 10, to: 0, total: 0 }
+};
 
 export const appointmentsService = {
   /**
-   * Obtener lista de citas (con paginación y filtros)
+   * 1. Obtener citas (SOLICITANDO ORDEN DESCENDENTE)
    */
-  getAllAppointments: async (filters: AppointmentFilters = {}): Promise<Appointment[]> => {
+  getAppointments: async (filters?: any): Promise<PaginatedResponse<Cita>> => {
     try {
-      const params: any = { ...filters };
-      if (params.estado === 'todas') delete params.estado;
-      if (!params.fecha) delete params.fecha;
-      if (!params.medico_id) delete params.medico_id;
+      // Intentamos forzar al servidor a darnos las más nuevas primero y muchas (300)
+      const params = { 
+          ...filters, 
+          per_page: 300, 
+          sort_by: 'desc', // Intentos comunes de ordenamiento
+          order: 'desc',
+          orderBy: 'id'
+      };
 
-      const response = await http.get<any>(API_ENDPOINTS.APPOINTMENTS.LIST, { params });
+      const response = await http.get<PaginatedResponse<Cita>>(
+        API_ENDPOINTS.APPOINTMENTS.LIST, 
+        { params }
+      );
       
-      if (Array.isArray(response.data)) return response.data;
-      if (response.data && Array.isArray(response.data.data)) return response.data.data;
-      
-      return [];
+      // Manejo flexible de la respuesta
+      if (response.data && (response.data as any).data && Array.isArray((response.data as any).data)) {
+         return response.data;
+      } else if (Array.isArray(response.data)) {
+         return { ...emptyPaginatedResponse, data: response.data as any };
+      }
+      return response.data || emptyPaginatedResponse;
     } catch (error) {
       console.error("Error fetching appointments:", error);
       return [];
     }
   },
 
-  /**
-   * Obtener una cita por ID
-   */
-  getAppointmentById: async (id: number): Promise<Appointment | null> => {
+  getAppointmentById: async (id: number): Promise<Cita | null> => {
     try {
-      const response = await http.get<ApiResponse<Appointment>>(
-        API_ENDPOINTS.APPOINTMENTS.GET(id)
-      );
-      return response.data?.data || null;
-    } catch (error) {
-      console.error(`Error al obtener cita ${id}:`, error);
-      return null;
-    }
+      const response = await http.get<{ data: Cita }>(API_ENDPOINTS.APPOINTMENTS.GET(id));
+      return response.data.data || (response.data as any);
+    } catch (error) { return null; }
   },
 
   /**
-   * Crear nueva cita
+   * 2. CREAR CITA (SOLUCIÓN QUIRÚRGICA)
+   * Enviamos formato SQL puro y duro. Es lo que menos falla.
    */
-  createAppointment: async (data: CreateAppointmentPayload): Promise<Appointment> => {
+  createAppointment: async (data: CreateAppointmentPayload): Promise<Cita> => {
+    // Construcción manual de fechas YYYY-MM-DD HH:mm:ss
+    const fechaInicio = `${data.fecha} ${data.hora}:00`;
+    
+    // Calculamos fin (+30 min)
+    const d = new Date(`${data.fecha}T${data.hora}:00`);
+    d.setMinutes(d.getMinutes() + 30);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fechaFin = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
     const payload = {
-      medico_id: data.medico_id,
-      paciente_id: data.paciente_id,
-      fecha_hora_inicio: `${data.fecha} ${data.hora}:00`,
-      motivo_consulta: data.motivo
+      medico_id: Number(data.medico_id),
+      paciente_id: Number(data.paciente_id),
+      // Campos de fecha estándar
+      fecha_hora_inicio: fechaInicio,
+      fecha_hora_fin: fechaFin,
+      // Campos redundantes pero seguros (sin cambiar nombres)
+      motivo_consulta: data.motivo,
+      estado: 'programada'
     };
 
-    const response = await http.post<ApiResponse<Appointment>>(
+    console.log("🚀 Payload Limpio:", payload);
+
+    const response = await http.post<{ data: Cita }>(
       API_ENDPOINTS.APPOINTMENTS.CREATE,
       payload
     );
     
-    if (response.data?.data) {
-        return response.data.data;
-    } else if (response.data) {
-         return response.data as unknown as Appointment;
-    }
-
-    throw new Error("La API no devolvió la cita creada.");
+    return response.data.data || (response.data as any);
   },
 
-  /**
-   * Actualizar cita (Edición completa o parcial)
-   */
-  updateAppointment: async (id: number, data: UpdateAppointmentData): Promise<Appointment> => {
-    const response = await http.put<ApiResponse<Appointment>>(
-      API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      data
-    );
-    
-    if (response.data?.data) {
-      return response.data.data;
-    } else if (response.data) {
-      return response.data as unknown as Appointment;
+  updateAppointment: async (id: number, data: UpdateAppointmentData): Promise<Cita> => {
+    const payload: any = { ...data };
+    if (data.fecha && data.hora) {
+        payload.fecha_hora_inicio = `${data.fecha} ${data.hora}:00`;
+        delete payload.fecha;
+        delete payload.hora;
     }
-
-    throw new Error("La API no devolvió la cita actualizada.");
+    const response = await http.put(API_ENDPOINTS.APPOINTMENTS.UPDATE(id), payload);
+    return (response.data as any).data || response.data;
   },
 
-  /**
-   * Eliminar cita
-   */
   deleteAppointment: async (id: number): Promise<void> => {
     await http.delete(API_ENDPOINTS.APPOINTMENTS.DELETE(id));
   },
 
-  /**
-   * Cancelar cita
-   */
-  cancelAppointment: async (id: number, reason?: string): Promise<boolean> => {
-    try {
-        // Usamos DELETE físico según tu configuración original
-        await http.delete(API_ENDPOINTS.APPOINTMENTS.DELETE(id));
-        return true;
-    } catch (error) {
-        console.error("Error al cancelar cita:", error);
-        throw error;
-    }
-  },
-
-  /**
-   * Confirmar cita
-   */
-  confirmAppointment: async (id: number): Promise<Appointment> => {
-    const response = await http.post<ApiResponse<Appointment>>(
-      API_ENDPOINTS.APPOINTMENTS.CONFIRM(id)
-    );
-    // El ! al final fuerza a TS a confiar en que existe, pero idealmente valida
-    return response.data?.data!;
-  },
-
-  /**
-   * Completar cita
-   */
-  completeAppointment: async (id: number, notes?: string): Promise<Appointment> => {
-    const response = await http.post<ApiResponse<Appointment>>(
-      API_ENDPOINTS.APPOINTMENTS.COMPLETE(id),
-      { completion_notes: notes }
-    );
-    return response.data?.data!;
-  },
-
-  /**
-   * Reprogramar cita
-   */
-  rescheduleAppointment: async (id: number, newDate: string, newTime: string): Promise<Appointment> => {
-    let formattedTime = newTime.trim();
-    
-    if (formattedTime.match(/^\d{2}:\d{2}$/)) {
-      formattedTime = `${formattedTime}:00`;
-    }
-    
-    const payload = {
-      fecha_hora_inicio: `${newDate} ${formattedTime}`
-    };
-    
-    console.log('Reprogramando cita:', { 
-      id, 
-      newDate, 
-      newTime, 
-      formattedTime,
-      fullDateTime: payload.fecha_hora_inicio 
-    });
-    
-    const response = await http.put<ApiResponse<Appointment>>(
+  cancelAppointment: async (id: number, reason?: string): Promise<Cita> => {
+    const response = await http.put<{ data: Cita }>(
       API_ENDPOINTS.APPOINTMENTS.UPDATE(id),
-      payload
+      { estado: 'cancelada', notas_paciente: reason }
     );
-    
-    if (!response.data?.data) {
-      throw new Error("La API no devolvió la cita reprogramada.");
-    }
-    
-    return response.data.data;
-  },
-
-  /**
-   * Obtener horarios disponibles
-   */
-  getAvailableSlots: async (medicoId: number, date: string): Promise<string[]> => {
-    try {
-      const response = await http.get<AvailableSlotsResponse>(
-        API_ENDPOINTS.APPOINTMENTS.AVAILABLE_SLOTS,
-        { params: { medico_id: medicoId, fecha: date } }
-      );
-      
-      // @ts-ignore
-      if (response.data && Array.isArray(response.data.slots)) return response.data.slots;
-      // @ts-ignore
-      if (Array.isArray(response.data)) return response.data;
-
-      return [];
-    } catch (error) {
-      console.error("Error al obtener horarios disponibles:", error);
-      return [];
-    }
-  },
+    return response.data.data || (response.data as any);
+  }
 };

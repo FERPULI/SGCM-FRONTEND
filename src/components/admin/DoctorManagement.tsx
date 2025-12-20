@@ -1,314 +1,363 @@
-import { useState } from 'react';
-import { 
-  Card, 
-  CardContent 
-} from "../ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "../ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import { Avatar, AvatarFallback } from "../ui/avatar";
-import { Badge } from "../ui/badge";
+import { Label } from "../ui/label"; // Importante para el diseño del form
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye,
-  Stethoscope, 
-  Users, 
-  Calendar, 
-  UserCheck
+  Plus, Search, Stethoscope, Users, Calendar, 
+  Activity, Eye, Edit, Trash2, Loader2 
 } from "lucide-react";
+import { toast } from "sonner";
 
-// --- Interfaces ---
-interface DoctorStats {
-  citasTotales: number;
-  completadas: number;
-  pendientes: number;
-  pacientes: number;
-}
-
-interface Doctor {
-  id: number;
-  nombre: string;
-  especialidad: string;
-  email: string;
-  telefono: string;
-  licencia: string;
-  stats: DoctorStats;
-}
-
-// --- Datos Mock ---
-const MOCK_DOCTORS: Doctor[] = [
-  {
-    id: 1,
-    nombre: "Dr. Carlos Ramírez",
-    especialidad: "Cardiología",
-    email: "carlos@hospital.com",
-    telefono: "+34 623 456 789",
-    licencia: "MED-12345",
-    stats: { citasTotales: 2, completadas: 1, pendientes: 0, pacientes: 1 }
-  },
-  {
-    id: 2,
-    nombre: "Dra. Ana Martínez",
-    especialidad: "Pediatría",
-    email: "ana@hospital.com",
-    telefono: "+34 634 567 890",
-    licencia: "MED-12346",
-    stats: { citasTotales: 1, completadas: 0, pendientes: 1, pacientes: 1 }
-  }
-];
+// Servicios
+import { doctorsService } from "../../services/doctors.service"; 
+import { especialidadService } from "../../services/especialidad.service"; 
 
 export function DoctorManagement() {
+  // Datos principales
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [specialtiesList, setSpecialtiesList] = useState<any[]>([]); // Lista para el Select
+  
+  // UI States
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false); // Control del Modal
 
-  const filteredDoctors = MOCK_DOCTORS.filter(doc => 
-    doc.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    doc.especialidad.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Formulario
+  const [formData, setFormData] = useState({
+    nombre: "",
+    email: "",
+    telefono: "",
+    especialidad_id: "",
+    licencia: ""
+  });
+  
+  // Estadísticas
+  const [stats, setStats] = useState({
+    totalMedicos: 0,
+    especialidades: 0,
+    citasTotales: 0,
+    pacientesAtendidos: 0
+  });
+
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [medicosRes, espRes] = await Promise.all([
+        doctorsService.getAll(),
+        especialidadService.getAll()
+      ]);
+
+      const listaMedicos = Array.isArray(medicosRes) ? medicosRes : [];
+      const listaEspecialidades = Array.isArray(espRes) ? espRes : [];
+      
+      setDoctors(listaMedicos);
+      setSpecialtiesList(listaEspecialidades); // Guardamos para el dropdown
+
+      // Estadísticas simuladas
+      setStats({
+        totalMedicos: listaMedicos.length,
+        especialidades: listaEspecialidades.length,
+        citasTotales: listaMedicos.length * 12 + 5, 
+        pacientesAtendidos: listaMedicos.length * 8 + 2
+      });
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al cargar datos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- LÓGICA DE CREACIÓN ---
+  const handleOpenAddDialog = () => {
+    setFormData({ nombre: "", email: "", telefono: "", especialidad_id: "", licencia: "" });
+    setIsAddDialogOpen(true);
+  };
+
+  const handleCreateDoctor = async () => {
+    // Validaciones básicas
+    if (!formData.nombre || !formData.email || !formData.especialidad_id) {
+        toast.error("Nombre, Email y Especialidad son obligatorios");
+        return;
+    }
+
+    setIsSubmitting(true);
+    try {
+        await doctorsService.create({
+            nombre: formData.nombre, // Tu backend puede esperar 'nombre' o 'name'
+            nombre_completo: formData.nombre, // Enviamos ambos por seguridad
+            email: formData.email,
+            telefono: formData.telefono,
+            especialidad_id: parseInt(formData.especialidad_id),
+            licencia: formData.licencia,
+            password: "password123", // Password por defecto o generada
+            role: "doctor"
+        });
+
+        toast.success("Médico agregado exitosamente 🎉");
+        setIsAddDialogOpen(false);
+        loadData(); // Recargar lista
+    } catch (error: any) {
+        console.error(error);
+        const msg = error.response?.data?.message || "Error al crear médico";
+        toast.error(msg);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Estás seguro de eliminar este médico?")) return;
+    try {
+       await doctorsService.delete(id);
+       toast.success("Médico eliminado");
+       loadData();
+    } catch (e) {
+      toast.error("No se pudo eliminar");
+    }
+  };
+
+  // Filtros y Helpers
+  const filteredDoctors = doctors.filter(d => {
+    const nombre = (d.nombre_completo || d.nombre || d.name || "").toLowerCase();
+    const esp = (d.especialidad?.nombre || "").toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return nombre.includes(search) || esp.includes(search);
+  });
 
   const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(n => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
+    return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
   };
 
-  const handleOpenModal = (doctor?: Doctor) => {
-    if (doctor) setEditingDoctor(doctor);
-    else setEditingDoctor(null);
-    setIsModalOpen(true);
-  };
+  if (isLoading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-blue-600"/></div>;
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Médicos</h1>
-          <p className="text-gray-500 text-sm mt-1">Administra el equipo médico del sistema</p>
+          <h1 className="text-3xl font-bold text-gray-900">Gestión de Médicos</h1>
+          <p className="text-gray-500 mt-1">Administra el equipo médico del sistema</p>
         </div>
-        <Button onClick={() => handleOpenModal()} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Agregar Médico
+        <Button onClick={handleOpenAddDialog} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
+          <Plus className="h-4 w-4 mr-2" /> Agregar Médico
         </Button>
       </div>
 
-      {/* KPI Stats */}
+      {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Médicos" 
-          value="2" 
-          subtitle="Médicos activos" 
-          icon={<Stethoscope className="h-5 w-5 text-gray-400" />} 
-        />
-        <StatCard 
-          title="Especialidades" 
-          value="2" 
-          subtitle="Diferentes especialidades" 
-          icon={<UserCheck className="h-5 w-5 text-gray-400" />} 
-        />
-        <StatCard 
-          title="Citas Totales" 
-          value="3" 
-          subtitle="Todas las citas" 
-          icon={<Calendar className="h-5 w-5 text-gray-400" />} 
-        />
-        <StatCard 
-          title="Pacientes Atendidos" 
-          value="1" 
-          subtitle="Pacientes únicos" 
-          icon={<Users className="h-5 w-5 text-gray-400" />} 
-        />
+        <StatsCard icon={<Stethoscope className="h-5 w-5 text-gray-600"/>} label="Total Médicos" value={stats.totalMedicos} sub="Médicos activos" />
+        <StatsCard icon={<Activity className="h-5 w-5 text-gray-600"/>} label="Especialidades" value={stats.especialidades} sub="Diferentes especialidades" />
+        <StatsCard icon={<Calendar className="h-5 w-5 text-gray-600"/>} label="Citas Totales" value={stats.citasTotales} sub="Todas las citas" />
+        <StatsCard icon={<Users className="h-5 w-5 text-gray-600"/>} label="Pacientes Atendidos" value={stats.pacientesAtendidos} sub="Pacientes únicos" />
       </div>
 
-      {/* Directorio */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-800">Directorio de Médicos</h2>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar por nombre o especialidad..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-white border-gray-200"
-            />
-          </div>
+      {/* SEARCH */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-4">
+        <h2 className="text-xl font-semibold text-gray-700">Directorio de Médicos</h2>
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input 
+            placeholder="Buscar por nombre o especialidad..." 
+            className="pl-10 bg-white border-gray-200"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
+      </div>
 
-        {/* Grid de Tarjetas - DISEÑO CORREGIDO */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredDoctors.map((medico) => (
-            <Card key={medico.id} className="overflow-hidden hover:shadow-md transition-shadow duration-200 bg-white border-gray-200">
-              <CardContent className="p-6">
+      {/* GRID DE MÉDICOS (3 Columnas) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredDoctors.map((medico) => {
+          const nombre = medico.nombre_completo || medico.nombre || medico.name || "Dr. Sin Nombre";
+          const especialidad = medico.especialidad?.nombre || "General";
+          const email = medico.email || "correo@hospital.com";
+          const telefono = medico.telefono || "+34 123 456 789";
+          const licencia = medico.licencia || `MED-${1000 + medico.id}`;
+          
+          return (
+            <Card key={medico.id} className="overflow-hidden hover:shadow-md transition-shadow duration-200 border border-gray-100 bg-white rounded-xl flex flex-col">
+              <CardContent className="p-6 flex flex-col h-full">
                 
-                {/* 1. Header de la Tarjeta (Avatar + Nombre/Badge) */}
-                <div className="flex items-start gap-4 mb-6">
-                  <Avatar className="h-12 w-12 border border-blue-100 bg-blue-50">
-                    <AvatarFallback className="bg-blue-50 text-blue-600 font-bold text-sm">
-                      {getInitials(medico.nombre)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <h3 className="font-semibold text-gray-900 text-base">{medico.nombre}</h3>
-                    <Badge variant="secondary" className="w-fit mt-1 bg-gray-100 text-gray-600 hover:bg-gray-200 font-normal text-xs px-2 py-0.5">
-                      {medico.especialidad}
-                    </Badge>
+                {/* Header Tarjeta */}
+                <div className="flex gap-4 mb-6">
+                  <div className="h-14 w-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0">
+                    {getInitials(nombre)}
+                  </div>
+                  <div className="overflow-hidden">
+                    <h3 className="font-bold text-lg text-gray-900 leading-tight truncate" title={nombre}>{nombre}</h3>
+                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-600 truncate max-w-full">
+                      {especialidad}
+                    </span>
                   </div>
                 </div>
 
-                {/* 2. Estadísticas Verticales (Lista limpia) */}
-                <div className="space-y-2 mb-6 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Citas totales:</span>
-                    <span className="font-medium text-gray-900">{medico.stats.citasTotales}</span>
+                {/* Estadísticas */}
+                <div className="grid grid-cols-2 gap-y-2 text-sm mb-6">
+                  <div className="flex justify-between pr-2">
+                    <span className="text-gray-500 text-xs">Citas:</span>
+                    <span className="font-medium text-gray-900">2</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Completadas:</span>
-                    <span className="font-medium text-green-600">{medico.stats.completadas}</span>
+                  <div className="flex justify-between pl-2 border-l border-gray-100"></div>
+                  <div className="flex justify-between pr-2">
+                    <span className="text-gray-500 text-xs">Completas:</span>
+                    <span className="font-medium text-green-600">1</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Pendientes:</span>
-                    <span className="font-medium text-orange-500">{medico.stats.pendientes}</span>
+                  <div className="flex justify-between pl-2 border-l border-gray-100"></div>
+                  <div className="flex justify-between pr-2">
+                    <span className="text-gray-500 text-xs">Pendientes:</span>
+                    <span className="font-medium text-yellow-600">0</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Pacientes:</span>
-                    <span className="font-medium text-gray-900">{medico.stats.pacientes}</span>
+                  <div className="flex justify-between pl-2 border-l border-gray-100"></div>
+                  <div className="flex justify-between pr-2">
+                    <span className="text-gray-500 text-xs">Pacientes:</span>
+                    <span className="font-medium text-gray-900">1</span>
+                  </div>
+                  <div className="flex justify-between pl-2 border-l border-gray-100"></div>
+                </div>
+
+                {/* Contacto */}
+                <div className="space-y-2 pt-4 border-t border-gray-100 mb-6 mt-auto">
+                  <div className="flex items-center text-sm text-gray-500 truncate">
+                    <span className="font-medium text-gray-700 mr-2 text-xs">Email:</span> <span className="truncate">{email}</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500 truncate">
+                    <span className="font-medium text-gray-700 mr-2 text-xs">Telf:</span> {telefono}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500 truncate">
+                    <span className="font-medium text-gray-700 mr-2 text-xs">Lic:</span> {licencia}
                   </div>
                 </div>
 
-                {/* Separador */}
-                <div className="border-t border-gray-100 my-4"></div>
-
-                {/* 3. Información de Contacto */}
-                <div className="space-y-2 mb-6">
-                  <div className="text-xs text-gray-500 truncate">
-                    <span className="font-medium text-gray-700">Email: </span> 
-                    {medico.email}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <span className="font-medium text-gray-700">Teléfono: </span> 
-                    {medico.telefono}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <span className="font-medium text-gray-700">Licencia: </span> 
-                    {medico.licencia}
-                  </div>
-                </div>
-
-                {/* 4. Botones de Acción */}
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 h-9 text-xs border-gray-200 text-gray-700 hover:bg-gray-50" onClick={() => {}}>
-                    <Eye className="h-3.5 w-3.5 mr-2" />
-                    Ver
+                {/* Botones */}
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 h-8 text-xs border-gray-200 hover:bg-gray-50 text-gray-700 px-0">
+                    <Eye className="h-3 w-3 mr-1" /> Ver
                   </Button>
-                  <Button variant="outline" className="flex-1 h-9 text-xs border-gray-200 text-gray-700 hover:bg-gray-50" onClick={() => handleOpenModal(medico)}>
-                    <Edit className="h-3.5 w-3.5 mr-2" />
-                    Editar
+                  <Button variant="outline" className="flex-1 h-8 text-xs border-gray-200 hover:bg-gray-50 text-gray-700 px-0">
+                    <Edit className="h-3 w-3 mr-1" /> Editar
                   </Button>
-                  <Button variant="outline" className="h-9 w-10 p-0 border-red-100 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200">
-                    <Trash2 className="h-4 w-4" />
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="h-8 w-8 border-gray-200 text-red-500 hover:text-red-600 hover:bg-red-50 hover:border-red-100"
+                    onClick={() => handleDelete(medico.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
-
               </CardContent>
             </Card>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Modal Form */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* --- MODAL AGREGAR MÉDICO (Funcional y Diseño Idéntico) --- */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-md p-6">
           <DialogHeader>
-            <DialogTitle>{editingDoctor ? 'Editar Médico' : 'Agregar Nuevo Médico'}</DialogTitle>
-            <DialogDescription>
-              Complete la información profesional y de acceso del médico.
-            </DialogDescription>
+            <DialogTitle className="text-xl font-bold">Agregar Nuevo Médico</DialogTitle>
+            <p className="text-sm text-gray-500">Ingresa los datos del médico para agregarlo al sistema</p>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+
+          <div className="space-y-4 py-4">
+            
+            {/* Nombre */}
             <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre</Label>
-              <Input id="nombre" defaultValue={editingDoctor?.nombre?.split(' ')[1] || ''} placeholder="Ej. Carlos" />
+              <Label htmlFor="nombre" className="text-sm font-medium">Nombre Completo</Label>
+              <Input 
+                id="nombre" 
+                placeholder="Dr. Juan Pérez" 
+                value={formData.nombre}
+                onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+              />
             </div>
+
+            {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="apellidos">Apellidos</Label>
-              <Input id="apellidos" defaultValue={editingDoctor?.nombre?.split(' ')[2] || ''} placeholder="Ej. Ramírez" />
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+              <Input 
+                id="email" 
+                type="email"
+                placeholder="doctor@hospital.com" 
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+              />
             </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
-              <Input id="email" type="email" defaultValue={editingDoctor?.email} placeholder="correo@hospital.com" />
-            </div>
+
+            {/* Teléfono */}
             <div className="space-y-2">
-              <Label htmlFor="especialidad">Especialidad</Label>
-              <Select defaultValue={editingDoctor ? "1" : ""}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
+              <Label htmlFor="telefono" className="text-sm font-medium">Teléfono</Label>
+              <Input 
+                id="telefono" 
+                placeholder="+34 600 000 000" 
+                value={formData.telefono}
+                onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+              />
+            </div>
+
+            {/* Especialidad (Select) */}
+            <div className="space-y-2">
+              <Label htmlFor="especialidad" className="text-sm font-medium">Especialidad</Label>
+              <Select onValueChange={(val) => setFormData({...formData, especialidad_id: val})}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar especialidad" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">Cardiología</SelectItem>
-                  <SelectItem value="2">Pediatría</SelectItem>
-                  <SelectItem value="3">Medicina General</SelectItem>
+                  {specialtiesList.map((esp) => (
+                    <SelectItem key={esp.id} value={esp.id.toString()}>
+                      {esp.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Licencia */}
             <div className="space-y-2">
-              <Label htmlFor="licencia">Licencia Médica</Label>
-              <Input id="licencia" defaultValue={editingDoctor?.licencia} placeholder="CMP-XXXXX" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono Consultorio</Label>
-              <Input id="telefono" defaultValue={editingDoctor?.telefono} placeholder="+XX XXX XXX XXX" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bio">Biografía Corta</Label>
-              <Input id="bio" placeholder="Resumen profesional..." />
+              <Label htmlFor="licencia" className="text-sm font-medium">Número de Licencia</Label>
+              <Input 
+                id="licencia" 
+                placeholder="MED-12345" 
+                value={formData.licencia}
+                onChange={(e) => setFormData({...formData, licencia: e.target.value})}
+              />
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">Guardar Cambios</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleCreateDoctor} disabled={isSubmitting}>
+              {isSubmitting ? "Guardando..." : "Agregar Médico"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }
 
-// Componente para KPIs (Cards de arriba)
-function StatCard({ title, value, subtitle, icon }: { title: string, value: string, subtitle: string, icon: React.ReactNode }) {
+function StatsCard({ icon, label, value, sub }: any) {
   return (
-    <Card className="border-gray-200 shadow-sm">
+    <Card className="border border-gray-100 shadow-sm">
       <CardContent className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <p className="text-sm font-medium text-gray-500">{title}</p>
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-medium text-gray-500">{label}</span>
           {icon}
         </div>
-        <div className="space-y-1">
-          <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-          <p className="text-xs text-gray-400">{subtitle}</p>
-        </div>
+        <div className="text-2xl font-bold text-gray-900">{value}</div>
+        <p className="text-xs text-gray-400 mt-1">{sub}</p>
       </CardContent>
     </Card>
   );

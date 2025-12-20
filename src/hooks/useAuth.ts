@@ -1,7 +1,6 @@
 /**
- * Hook de autenticación
- * 
- * Proporciona funciones y estado relacionados con la autenticación
+ * src/hooks/useAuth.ts
+ * (CORREGIDO: Nombre de funciones correctos y sin auto-logout agresivo)
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -31,17 +30,31 @@ export const useAuth = (): UseAuthReturn => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const userData = storage.getUserData();
+        // 1. Intentamos recuperar lo que hay en memoria primero (Carga Instantánea)
+        const savedUser = storage.getUser(); // Usamos el método unificado
+        const token = storage.getAccessToken();
         
-        if (userData && storage.isAuthenticated()) {
-          // Verificar que el token sigue siendo válido
-          const currentUser = await authService.getCurrentUser();
-          setUser(currentUser);
+        if (token && savedUser) {
+          setUser(savedUser); // Mostramos el usuario inmediatamente
+        }
+
+        // 2. Verificamos con el servidor en segundo plano
+        if (token) {
+          // CORRECCIÓN CLAVE: Usamos 'getProfile', que es el nombre real en tu servicio
+          const currentUser = await authService.getProfile();
+          
+          if (currentUser) {
+            setUser(currentUser);
+            // Actualizamos el storage con la info fresca
+            storage.setUser(currentUser); 
+          }
         }
       } catch (err) {
-        // Si falla, limpiar el storage
-        storage.clear();
-        setUser(null);
+        console.warn("No se pudo refrescar la sesión en segundo plano (pero no borramos nada).", err);
+        // CORRECCIÓN IMPORTANTE:
+        // NO llamamos a storage.clear() aquí. 
+        // Si el token es inválido (401), el interceptor http.ts ya se encargará.
+        // Si fue un error de red, dejamos al usuario trabajar con lo que tiene en caché.
       } finally {
         setIsLoading(false);
       }
@@ -89,6 +102,8 @@ export const useAuth = (): UseAuthReturn => {
     } catch (err) {
       console.error('Error al cerrar sesión:', err);
     } finally {
+      // Aquí sí limpiamos porque el usuario lo pidió
+      storage.clear(); 
       setUser(null);
       setIsLoading(false);
     }
@@ -96,12 +111,15 @@ export const useAuth = (): UseAuthReturn => {
 
   const refreshUser = useCallback(async () => {
     try {
-      const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      // CORRECCIÓN: Usamos getProfile
+      const currentUser = await authService.getProfile();
+      if (currentUser) {
+        setUser(currentUser);
+        storage.setUser(currentUser);
+      }
     } catch (err) {
       console.error('Error al refrescar usuario:', err);
-      setUser(null);
-      storage.clear();
+      // Aquí tampoco borramos nada agresivamente
     }
   }, []);
 

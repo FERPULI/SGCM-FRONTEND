@@ -1,456 +1,521 @@
 import { useState, useEffect } from "react";
-import * as httpService from "../../services/http"; 
-
-const api = (httpService as any).http || (httpService as any).default || (httpService as any).api || (httpService as any).axios;
-
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Search, Plus, Edit, Trash2, Loader2, Calendar as CalendarIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
-import { Label } from "../ui/label";
-import { Textarea } from "../ui/textarea"; 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../ui/dialog"; // Agregué Description para quitar el warning
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Calendar } from "../ui/calendar";
-import { format } from "date-fns";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { StatusBadge } from "../shared/StatusBadge";
+import { Cita, Especialidad } from "../../types"; 
+import { Plus, Edit, Trash2, Loader2, AlertCircle, Calendar as CalendarIcon, Eye, Clock, User, FileText } from "lucide-react";
+import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
+import { toast } from "sonner";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { Calendar } from "../ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
-// --- INTERFACES ACTUALIZADAS ---
-interface AppointmentView {
-  id: number;
-  pacienteNombre: string;
-  medicoNombre: string;
-  especialidad: string;
-  fecha: string;
-  hora: string;
-  estado: string;
-  pacienteEmail?: string;
-  // Campos ocultos necesarios para editar
-  pacienteId: string;
-  medicoId: string;
-  fechaRaw: string; // Fecha completa ISO para el calendario
-  motivo: string;
-}
-
-interface Stats {
-  total: number;
-  activas: number;
-  pendientes: number;
-  completadas: number;
-  canceladas: number;
-}
-
-interface SimpleUser {
-  id: number;
-  nombre: string;
-}
+// Servicios
+import { appointmentsService } from "../../services/appointments.service";
+import { doctorsService, DoctorDirectoryItem } from "../../services/doctors.service"; 
+import { especialidadService } from "../../services/especialidad.service"; 
+import { patientsService, PatientDirectoryItem } from "../../services/patients.service"; 
 
 export function AppointmentManagement() {
-  // Estados principales
-  const [appointments, setAppointments] = useState<AppointmentView[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, activas: 0, pendientes: 0, completadas: 0, canceladas: 0 });
-  const [isLoading, setIsLoading] = useState(true);
+  const [appointments, setAppointments] = useState<Cita[]>([]);
+  const [doctors, setDoctors] = useState<DoctorDirectoryItem[]>([]);
+  const [specialties, setSpecialties] = useState<Especialidad[]>([]);
+  const [patients, setPatients] = useState<PatientDirectoryItem[]>([]); 
   
-  // Filtros
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("todas");
   
-  // Estado del Modal y Edición
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null); // ID de la cita que se está editando (null si es nueva)
-  
-  // Listas para selects
-  const [loadingOptions, setLoadingOptions] = useState(false);
-  const [pacientesList, setPacientesList] = useState<SimpleUser[]>([]);
-  const [medicosList, setMedicosList] = useState<SimpleUser[]>([]);
-  
-  // Formulario
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [viewingAppointment, setViewingAppointment] = useState<Cita | null>(null);
+
   const [formData, setFormData] = useState({
-    pacienteId: "",
-    medicoId: "",
+    patientId: "",
+    doctorId: "",
     date: undefined as Date | undefined,
-    hora: "",
-    estado: "programada",
-    motivo: ""
+    time: "",
+    reason: "",
+    status: "programada"
   });
 
-  // --- 1. CARGA DE CITAS ---
-  const fetchCitas = async () => {
+  useEffect(() => { loadData(); }, []);
+
+const loadData = async () => {
     setIsLoading(true);
     try {
-      if (!api) return;
-      const response = await api.get('/appointments', { params: { status: activeTab, search: searchTerm } });
+      const [citasRes, medicosRes, espRes, pacRes] = await Promise.all([
+        // Pedimos muchas para evitar paginación oculta
+        appointmentsService.getAppointments({ per_page: 300 }), 
+        doctorsService.getAll(),
+        especialidadService.getAll(),
+        patientsService.getAll()
+      ]);
 
-      if (response.data?.success) {
-        const pageData = response.data.data; 
-        const arrayData = pageData?.data || []; 
-        
-        const mappedData = arrayData.map((item: any) => {
-          // Extraer hora limpia (HH:mm) de la fecha ISO
-          const fechaObj = new Date(item.fecha_hora_inicio);
-          const horaLimpia = fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const listaCitas = (citasRes as any).data || (Array.isArray(citasRes) ? citasRes : []);
+      
+      // --- CORRECCIÓN DE ORDENAMIENTO ---
+      // Forzamos a que la ID más alta (la última creada) aparezca primera en la tabla
+      const citasOrdenadas = Array.isArray(listaCitas) 
+        ? [...listaCitas].sort((a: Cita, b: Cita) => Number(b.id) - Number(a.id)) 
+        : [];
+      
+      setAppointments(citasOrdenadas); // Guardamos la lista ya ordenada
 
-          return {
-            id: item.id,
-            pacienteNombre: item.paciente?.user ? `${item.paciente.user.nombre} ${item.paciente.user.apellidos}` : 'Desconocido',
-            pacienteEmail: item.paciente?.user?.email,
-            medicoNombre: item.medico?.user ? `${item.medico.user.nombre} ${item.medico.user.apellidos}` : 'N/A',
-            especialidad: item.medico?.especialidad?.nombre || 'General',
-            fecha: item.fecha_hora_inicio,
-            hora: horaLimpia, 
-            estado: item.estado || 'pendiente',
-            // Mapeamos los datos extra para la edición
-            pacienteId: item.paciente_id?.toString() || "",
-            medicoId: item.medico_id?.toString() || "",
-            fechaRaw: item.fecha_hora_inicio,
-            motivo: item.motivo_consulta || ""
-          };
-        });
-        
-        setAppointments(mappedData);
-        if (response.data.stats) setStats(response.data.stats);
-      }
+      // ... resto de la carga (médicos, pacientes, etc.) ...
+      const listaMedicos = (medicosRes as any).data || (Array.isArray(medicosRes) ? medicosRes : []);
+      setDoctors(Array.isArray(listaMedicos) ? listaMedicos : []);
+      const listaEsp = (espRes as any).data || (Array.isArray(espRes) ? espRes : []);
+      setSpecialties(Array.isArray(listaEsp) ? listaEsp : []);
+      const listaPacientes = (pacRes as any).data || (Array.isArray(pacRes) ? pacRes : []);
+      setPatients(Array.isArray(listaPacientes) ? listaPacientes : []);
+
     } catch (error) {
-      console.error("Error cargando citas:", error);
+      console.error(error);
+      setError("Error cargando datos del sistema");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- 2. CARGAR OPCIONES DEL FORMULARIO ---
-  const fetchOptions = async () => {
-    setLoadingOptions(true);
-    try {
-      const [pacientesRes, medicosRes] = await Promise.all([
-        api.get('/patients-list'), 
-        api.get('/doctors-list')    
-      ]);
-
-      const pacientesData = Array.isArray(pacientesRes.data) ? pacientesRes.data : (pacientesRes.data?.data || []);
-      const medicosData = Array.isArray(medicosRes.data) ? medicosRes.data : (medicosRes.data?.data || []);
-      
-      setPacientesList(pacientesData);
-      setMedicosList(medicosData);
-    } catch (error) {
-      console.error("Error cargando listas:", error);
-    } finally {
-      setLoadingOptions(false);
-    }
+  const stats = {
+    total: appointments.length,
+    activas: appointments.filter(a => a.estado === 'programada' || a.estado === 'confirmada').length,
+    pendientes: appointments.filter(a => a.estado === 'pendiente').length,
+    completadas: appointments.filter(a => a.estado === 'completada' || a.estado === 'finalizada').length,
+    canceladas: appointments.filter(a => a.estado === 'cancelada').length,
   };
 
-  useEffect(() => {
-    const timer = setTimeout(() => { fetchCitas(); }, 500);
-    return () => clearTimeout(timer);
-  }, [activeTab, searchTerm]);
+  const openCreateDialog = () => {
+    setEditingId(null); 
+    setFormData({ patientId: "", doctorId: "", date: undefined, time: "", reason: "", status: "programada" });
+    setShowDialog(true);
+  };
 
-  useEffect(() => {
-    if (showAddDialog) fetchOptions();
-  }, [showAddDialog]);
-
-  // --- 3. ACCIÓN: ABRIR EDITAR ---
-  const handleEdit = (cita: AppointmentView) => {
-    setEditingId(cita.id); // Marcamos que estamos editando
+  const handleEditClick = (cita: Cita) => {
+    setEditingId(cita.id); 
+    const fechaStr = cita.fecha_hora_inicio || cita.fecha || "";
+    const fechaObj = new Date(fechaStr);
+    let horaStr = "";
+    if (cita.hora) {
+        horaStr = cita.hora.substring(0, 5);
+    } else if (isValid(fechaObj)) {
+        horaStr = format(fechaObj, "HH:mm");
+    }
+    const motivoReal = cita.motivo || cita.motivo_consulta || "";
     setFormData({
-      pacienteId: cita.pacienteId,
-      medicoId: cita.medicoId,
-      date: new Date(cita.fechaRaw), // Convertimos string ISO a objeto Date para el calendario
-      hora: cita.hora,
-      estado: cita.estado,
-      motivo: cita.motivo
+        patientId: cita.paciente_id?.toString() || cita.paciente?.id?.toString() || "",
+        doctorId: cita.medico_id?.toString() || cita.medico?.id?.toString() || "",
+        date: isValid(fechaObj) ? fechaObj : undefined,
+        time: horaStr,
+        reason: motivoReal, 
+        status: cita.estado || "programada"
     });
-    setShowAddDialog(true);
+    setShowDialog(true);
   };
 
-  // --- 4. ACCIÓN: ELIMINAR ---
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("¿Estás seguro de que deseas eliminar esta cita? Esta acción no se puede deshacer.")) {
-      return;
-    }
-    
+  const handleViewClick = (cita: Cita) => {
+    setViewingAppointment(cita);
+    setShowViewDialog(true);
+  };
+
+  const handleDeleteClick = async (id: number) => {
+    if (!window.confirm("¿Estás seguro de eliminar esta cita?")) return;
     try {
-      await api.delete(`/appointments/${id}`);
-      fetchCitas(); // Recargar tabla
+        await appointmentsService.deleteAppointment(id);
+        toast.success("Cita eliminada correctamente");
+        // Actualizamos la lista localmente para que desaparezca al instante
+        setAppointments(prev => prev.filter(c => c.id !== id));
     } catch (error) {
-      console.error("Error eliminando cita:", error);
-      alert("Hubo un error al intentar eliminar la cita.");
+        console.error("Error eliminando:", error);
+        toast.error("No se pudo eliminar la cita");
     }
   };
 
-  // --- 5. ACCIÓN: GUARDAR (CREAR O ACTUALIZAR) ---
-  const handleSave = async () => {
-    if (!formData.pacienteId || !formData.medicoId || !formData.date || !formData.hora) {
-      alert("Por favor completa los campos obligatorios");
+  // --- FUNCIÓN GUARDAR OPTIMIZADA ---
+  const handleSaveAppointment = async (e: React.MouseEvent) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+
+    if (!formData.patientId || !formData.doctorId || !formData.date || !formData.time) {
+      toast.error("Faltan campos obligatorios");
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      const fechaBase = format(formData.date, 'yyyy-MM-dd');
-      const fechaHoraInicio = `${fechaBase} ${formData.hora}:00`;
-
-      const payload = {
-        paciente_id: formData.pacienteId,
-        medico_id: formData.medicoId,
-        fecha_hora_inicio: fechaHoraInicio,
-        motivo_consulta: formData.motivo,
-        estado: formData.estado
-      };
+      const fechaFormat = format(formData.date, "yyyy-MM-dd");
+      const motivoSeguro = formData.reason && formData.reason.trim() !== "" ? formData.reason : "Consulta General"; 
 
       if (editingId) {
-        // MODO EDICIÓN: PUT
-        await api.put(`/appointments/${editingId}`, payload);
+        // ACTUALIZAR
+        const updatedCita = await appointmentsService.updateAppointment(editingId, {
+            fecha: fechaFormat,
+            hora: formData.time,
+            motivo_consulta: motivoSeguro,
+            estado: formData.status as any
+        });
+        
+        // Actualizamos la lista localmente
+        setAppointments(prev => prev.map(c => c.id === editingId ? updatedCita : c));
+        toast.success("Cita actualizada");
       } else {
-        // MODO CREACIÓN: POST
-        await api.post('/appointments', payload);
+        // CREAR
+        const newCita = await appointmentsService.createAppointment({
+            medico_id: formData.doctorId,   
+            paciente_id: formData.patientId, 
+            fecha: fechaFormat,
+            hora: formData.time,
+            motivo: motivoSeguro
+        });
+
+        // --- TRUCO DE VISIBILIDAD ---
+        // Insertamos la nueva cita AL PRINCIPIO de la lista visualmente
+        // Esto garantiza que la veas aunque el backend la ponga al final.
+        if (newCita && newCita.id) {
+             setAppointments(prev => [newCita, ...prev]);
+             toast.success("Cita creada correctamente");
+        } else {
+             // Si el backend no devolvió el objeto completo, recargamos
+             toast.success("Cita creada. Actualizando lista...");
+             loadData();
+        }
       }
-      
-      handleCloseDialog();
-      fetchCitas();
-      
-    } catch (error) {
-      console.error("Error guardando cita", error);
-      alert("Error al guardar la cita. Verifica la consola.");
+
+      setShowDialog(false);
+
+    } catch (error: any) {
+      console.error("❌ Error al guardar:", error);
+      if (error.response) {
+          const s = error.response.status;
+          if (s === 422) {
+             const data = error.response.data;
+             if(data.errors) {
+                 const firstError = Object.values(data.errors)[0];
+                 toast.error(`Error: ${firstError}`);
+             } else {
+                 toast.error("Datos inválidos");
+             }
+          } else {
+             toast.error(`Error del servidor (${s})`);
+          }
+      } else {
+          toast.error("Error de conexión");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Limpiar formulario al cerrar
-  const handleCloseDialog = () => {
-    setShowAddDialog(false);
-    setEditingId(null); // Resetear modo edición
-    setFormData({ pacienteId: "", medicoId: "", date: undefined, hora: "", estado: "programada", motivo: "" });
+  // Helpers de visualización (Sin cambios)
+  const getSpecialtyName = (medicoIdInCita: number) => {
+    if (!medicoIdInCita) return "Sin Médico";
+    let doctor = doctors.find(d => {
+       if (!d) return false;
+       const docAny = d as any;
+       const idReal = docAny.id || docAny.id_medico || docAny.user_id;
+       return idReal == medicoIdInCita;
+    });
+    if (!doctor) return "-"; 
+    const docAny = doctor as any;
+    if (docAny.especialidad && docAny.especialidad.nombre) return docAny.especialidad.nombre;
+    const espId = docAny.especialidad_id || docAny.id_especialidad;
+    const specialty = specialties.find(s => s.id == espId);
+    return specialty ? specialty.nombre : "-";
   };
 
-  const getStatusColor = (estado: string) => {
-    switch(estado) {
-      case 'programada': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'confirmada': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-      case 'completada': return 'bg-green-100 text-green-800 border-green-200';
-      case 'cancelada': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const getPatientName = (p: PatientDirectoryItem) => {
+    if (!p) return "Desconocido";
+    if (p.nombre_completo) return p.nombre_completo;
+    if (p.user) return `${p.user.nombre} ${p.user.apellidos}`;
+    return `${p.nombre || ''} ${p.apellidos || ''}`.trim() || `Paciente #${p.id}`;
   };
 
-  const timeSlots = Array.from({ length: 13 }, (_, i) => {
-    const hour = i + 8;
-    return [`${hour.toString().padStart(2, '0')}:00`, `${hour.toString().padStart(2, '0')}:30`];
-  }).flat();
+  const getDoctorDisplayName = (d: any) => {
+    if (d.nombre_completo) return d.nombre_completo;
+    if (d.user && d.user.nombre) return `${d.user.nombre} ${d.user.apellidos || ''}`;
+    if (d.nombre) return `${d.nombre} ${d.apellidos || ''}`;
+    return `Médico #${d.id}`;
+  };
+
+  const getPatientNameForDisplay = (cita: Cita) => {
+     if(cita.paciente?.nombre_completo) return cita.paciente.nombre_completo;
+     const found = patients.find(p => p.id === cita.paciente_id || (p as any).id_paciente === cita.paciente_id);
+     return found ? getPatientName(found) : "Desconocido";
+  };
+
+  const getDoctorNameForDisplay = (cita: Cita) => {
+    if(cita.medico?.nombre_completo) return cita.medico.nombre_completo;
+    const found = doctors.find(d => {
+        const dAny = d as any;
+        const dId = dAny.id || dAny.id_medico;
+        return dId === cita.medico_id;
+    });
+    return found ? getDoctorDisplayName(found) : "Desconocido";
+  };
+
+  const getDoctorSpecialtyForDisplay = (cita: Cita) => {
+    const med = cita.medico as any;
+    if (med && med.especialidad && med.especialidad.nombre) return med.especialidad.nombre;
+    if (med && med.especialidad_nombre) return med.especialidad_nombre;
+    return getSpecialtyName(cita.medico_id || med?.id || 0);
+  };
+
+  const filteredAppointments = appointments.filter(cita => {
+    if (!cita) return false;
+    const nombrePaciente = cita.paciente?.nombre_completo || "Desconocido";
+    const nombreMedico = cita.medico?.nombre_completo || "No asignado";
+    const matchesSearch = 
+      nombrePaciente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      nombreMedico.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesTab = activeTab === "todas" || cita.estado?.toLowerCase() === activeTab.toLowerCase();
+    return matchesSearch && matchesTab;
+  });
+
+  const safeFormat = (dateStr: string, fmt: string) => {
+    try { return isValid(new Date(dateStr)) ? format(new Date(dateStr), fmt, { locale: es }) : "-"; } catch { return "-"; }
+  };
+
+  const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`);
+
+  if (error) return <div className="p-6 text-red-500 flex items-center gap-2"><AlertCircle/> {error}</div>;
 
   return (
     <div className="p-6 space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Gestión de Citas</h1>
-          <p className="text-gray-500 mt-1">Administra y supervisa todas las citas médicas.</p>
-        </div>
-        <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
-          <Plus className="h-4 w-4 mr-2" /> Nueva Cita
-        </Button>
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-3xl font-bold">Gestión de Citas</h1><p className="text-gray-500 mt-1">Administra todas las citas del sistema</p></div>
+        <Button onClick={openCreateDialog} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-2" /> Nueva Cita</Button>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatCard title="Total" value={stats.total} />
-        <StatCard title="Activas" value={stats.activas} color="text-blue-600" />
-        <StatCard title="Pendientes" value={stats.pendientes} color="text-orange-600" />
-        <StatCard title="Completadas" value={stats.completadas} color="text-green-600" />
-        <StatCard title="Canceladas" value={stats.canceladas} color="text-red-600" />
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card><CardContent className="p-4 flex flex-col items-center text-center"><span className="text-2xl font-bold">{stats.total}</span><span className="text-xs text-gray-500 uppercase">Total</span></CardContent></Card>
+        <Card><CardContent className="p-4 flex flex-col items-center text-center"><span className="text-2xl font-bold text-indigo-600">{stats.activas}</span><span className="text-xs text-gray-500 uppercase">Activas</span></CardContent></Card>
+        <Card><CardContent className="p-4 flex flex-col items-center text-center"><span className="text-2xl font-bold text-yellow-600">{stats.pendientes}</span><span className="text-xs text-gray-500 uppercase">Pendientes</span></CardContent></Card>
+        <Card><CardContent className="p-4 flex flex-col items-center text-center"><span className="text-2xl font-bold text-green-600">{stats.completadas}</span><span className="text-xs text-gray-500 uppercase">Completadas</span></CardContent></Card>
+        <Card><CardContent className="p-4 flex flex-col items-center text-center"><span className="text-2xl font-bold text-red-600">{stats.canceladas}</span><span className="text-xs text-gray-500 uppercase">Canceladas</span></CardContent></Card>
       </div>
 
-      {/* TABLA */}
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <CardTitle className="text-lg font-semibold">Listado de Citas</CardTitle>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar por paciente o médico..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-4 bg-gray-100/50 p-1">
-              <TabsTrigger value="todas">Todas</TabsTrigger>
-              <TabsTrigger value="activas">Activas</TabsTrigger>
-              <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
-              <TabsTrigger value="completadas">Completadas</TabsTrigger>
-              <TabsTrigger value="canceladas">Canceladas</TabsTrigger>
+      <Card>
+        <CardContent className="pt-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4">
+                <TabsTrigger value="todas">Todas</TabsTrigger>
+                <TabsTrigger value="programada">Activas</TabsTrigger>
+                <TabsTrigger value="pendiente">Pendientes</TabsTrigger>
+                <TabsTrigger value="completada">Completadas</TabsTrigger>
+                <TabsTrigger value="cancelada">Canceladas</TabsTrigger>
             </TabsList>
-
-            <TabsContent value={activeTab} className="mt-0">
-              <div className="rounded-md border border-gray-200 overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-gray-50/50">
-                    <TableRow>
-                      <TableHead className="font-semibold text-gray-600">Paciente</TableHead>
-                      <TableHead className="font-semibold text-gray-600">Médico / Especialidad</TableHead>
-                      <TableHead className="font-semibold text-gray-600">Fecha y Hora</TableHead>
-                      <TableHead className="font-semibold text-gray-600">Estado</TableHead>
-                      <TableHead className="text-right font-semibold text-gray-600">Acciones</TableHead>
+            
+            <div className="rounded-lg border">
+            <Table>
+                <TableHeader><TableRow><TableHead>Paciente</TableHead><TableHead>Médico</TableHead><TableHead>Especialidad</TableHead><TableHead>Fecha</TableHead><TableHead>Hora</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+                <TableBody>
+                {isLoading ? (<TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="animate-spin inline mr-2"/>Cargando...</TableCell></TableRow>) : 
+                    filteredAppointments.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8">No se encontraron citas</TableCell></TableRow>) : (
+                    filteredAppointments.map((cita) => (
+                    <TableRow key={cita.id}>
+                        <TableCell className="font-medium">{cita.paciente?.nombre_completo || "Desconocido"}</TableCell>
+                        <TableCell>{cita.medico?.nombre_completo || "No asignado"}</TableCell>
+                        <TableCell><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{getDoctorSpecialtyForDisplay(cita)}</span></TableCell>
+                        <TableCell>{safeFormat(cita.fecha_hora_inicio, "d MMMM yyyy")}</TableCell>
+                        <TableCell>{safeFormat(cita.fecha_hora_inicio, "HH:mm")}</TableCell>
+                        <TableCell><StatusBadge status={cita.estado} /></TableCell>
+                        <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleViewClick(cita)}>
+                                    <Eye className="h-4 w-4 text-gray-600 hover:text-gray-900" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleEditClick(cita)}>
+                                    <Edit className="h-4 w-4 text-gray-600 hover:text-blue-600" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(cita.id)}>
+                                    <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
+                                </Button>
+                            </div>
+                        </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow><TableCell colSpan={5} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin inline text-blue-500" /></TableCell></TableRow>
-                    ) : appointments.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="h-32 text-center text-gray-500">No se encontraron citas.</TableCell></TableRow>
-                    ) : (
-                      appointments.map((cita) => (
-                        <TableRow key={cita.id} className="hover:bg-gray-50/50 transition-colors">
-                          <TableCell>
-                            <div className="font-medium text-gray-900">{cita.pacienteNombre}</div>
-                            {cita.pacienteEmail && <div className="text-xs text-gray-500">{cita.pacienteEmail}</div>}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-gray-900">{cita.medicoNombre}</div>
-                            <div className="text-xs text-blue-600 bg-blue-50 inline-block px-1.5 py-0.5 rounded mt-0.5 font-medium">{cita.especialidad}</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2 text-gray-700">
-                                <CalendarIcon className="h-3.5 w-3.5 text-gray-400"/>
-                                {new Date(cita.fecha).toLocaleDateString()}
-                            </div>
-                            <div className="text-xs text-gray-500 ml-5.5">{cita.hora}</div>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(cita.estado)}`}>
-                              {cita.estado.charAt(0).toUpperCase() + cita.estado.slice(1)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {/* BOTONES FUNCIONALES AHORA */}
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-600" onClick={() => handleEdit(cita)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(cita.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
+                    ))
+                )}
+                </TableBody>
+            </Table>
+            </div>
           </Tabs>
         </CardContent>
       </Card>
       
-      {/* DIALOG (Mismo que antes, ahora reutilizable para Editar) */}
-      <Dialog open={showAddDialog} onOpenChange={(open) => !open && handleCloseDialog()}>
-        <DialogContent className="sm:max-w-[700px]">
+      {/* MODAL CREAR/EDITAR */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Cita" : "Nueva Cita"}</DialogTitle>
+              <DialogTitle>{editingId ? "Editar Cita" : "Nueva Cita"}</DialogTitle>
+              {/* Added DialogDescription to fix console warning */}
+              <DialogDescription>
+                {editingId ? "Modifique los detalles de la cita existente." : "Complete el formulario para agendar una nueva cita médica."}
+              </DialogDescription>
           </DialogHeader>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            
-            {/* Columna Izquierda */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="paciente">Paciente</Label>
-                <Select value={formData.pacienteId} onValueChange={(val) => setFormData({...formData, pacienteId: val})}>
-                  <SelectTrigger id="paciente">
-                    <SelectValue placeholder={loadingOptions ? "Cargando..." : "Selecciona un paciente"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pacientesList.map(p => (
-                      <SelectItem key={p.id} value={p.id.toString()}>{p.nombre}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Fecha</Label>
-                <div className="border rounded-md p-2 flex justify-center">
-                   <Calendar
-                      mode="single"
-                      selected={formData.date}
-                      onSelect={(date) => setFormData({...formData, date: date})}
-                      locale={es}
-                      className="rounded-md border shadow-sm"
-                   />
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-6 py-4">
+            <div className="space-y-2">
+              <Label>Paciente</Label>
+              <Select value={formData.patientId} onValueChange={(val) => setFormData({...formData, patientId: val})}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar paciente" /></SelectTrigger>
+                <SelectContent>
+                  {patients.map(p => {
+                    const docAny = p as any;
+                    const idReal = docAny.id || docAny.id_paciente || docAny.user_id;
+                    if (!idReal) return null; 
+                    return <SelectItem key={idReal} value={idReal.toString()}>{getPatientName(p)}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-
-            {/* Columna Derecha */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="medico">Médico</Label>
-                <Select value={formData.medicoId} onValueChange={(val) => setFormData({...formData, medicoId: val})}>
-                  <SelectTrigger id="medico">
-                    <SelectValue placeholder={loadingOptions ? "Cargando..." : "Selecciona un médico"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {medicosList.map(m => (
-                      <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label>Hora</Label>
-                    <Select value={formData.hora} onValueChange={(val) => setFormData({...formData, hora: val})}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="--:--" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[200px]">
-                        {timeSlots.map(time => (
-                            <SelectItem key={time} value={time}>{time}</SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                </div>
+            <div className="space-y-2">
+              <Label>Médico</Label>
+              <Select value={formData.doctorId} onValueChange={(val) => setFormData({...formData, doctorId: val})}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar médico" /></SelectTrigger>
+                <SelectContent>
+                  {doctors.map(d => {
+                      const docAny = d as any;
+                      const idReal = docAny.id || docAny.id_medico || docAny.user_id;
+                      if (!idReal) return null;
+                      return <SelectItem key={idReal} value={idReal.toString()}>{getDoctorDisplayName(docAny)}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+               <Label>Fecha</Label>
+               <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={"outline"} className={`w-full justify-start text-left font-normal ${!formData.date ? "text-muted-foreground" : ""}`}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.date ? format(formData.date, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={formData.date} onSelect={(date) => setFormData({...formData, date})} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Hora</Label>
+              <Select value={formData.time} onValueChange={(val) => setFormData({...formData, time: val})}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar hora" /></SelectTrigger>
+                <SelectContent>
+                  {timeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            {editingId && (
                 <div className="space-y-2">
                     <Label>Estado</Label>
-                    <Select value={formData.estado} onValueChange={(val) => setFormData({...formData, estado: val})}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="programada">Programada</SelectItem>
-                        <SelectItem value="confirmada">Confirmada</SelectItem>
-                        <SelectItem value="pendiente">Pendiente</SelectItem>
-                        <SelectItem value="completada">Completada</SelectItem>
-                        <SelectItem value="cancelada">Cancelada</SelectItem>
-                    </SelectContent>
+                    <Select value={formData.status} onValueChange={(val) => setFormData({...formData, status: val})}>
+                        <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="programada">Programada / Activa</SelectItem>
+                            <SelectItem value="pendiente">Pendiente</SelectItem>
+                            <SelectItem value="completada">Completada</SelectItem>
+                            <SelectItem value="cancelada">Cancelada</SelectItem>
+                        </SelectContent>
                     </Select>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="motivo">Motivo de la consulta</Label>
-                <Textarea 
-                    id="motivo" 
-                    placeholder="Describe el motivo..." 
-                    className="h-32 resize-none"
-                    value={formData.motivo}
-                    onChange={(e) => setFormData({...formData, motivo: e.target.value})}
-                />
-              </div>
+            )}
+            <div className="col-span-2 space-y-2">
+              <Label>Motivo de Consulta</Label>
+              <Textarea placeholder="Describa el motivo..." value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})}/>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-blue-600 text-white hover:bg-blue-700">
-              {editingId ? "Guardar Cambios" : "Crear Cita"}
+            <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+            <Button type="button" className="bg-blue-600" onClick={handleSaveAppointment} disabled={isSubmitting}>
+              {isSubmitting ? "Guardando..." : (editingId ? "Actualizar" : "Crear")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* MODAL VER DETALLES */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-md">
+            <DialogHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-xl">Detalles de la Cita</DialogTitle>
+                    {/* Added DialogDescription here too */}
+                    <DialogDescription>
+                        Información completa del registro médico.
+                    </DialogDescription>
+                </div>
+                {viewingAppointment && <StatusBadge status={viewingAppointment.estado} />}
+            </DialogHeader>
+
+            {viewingAppointment && (
+                <div className="space-y-4 py-2">
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex justify-between items-center">
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-medium text-blue-900 mb-1">Información de la Cita</h4>
+                            <div className="flex items-center text-blue-700">
+                                <CalendarIcon className="h-4 w-4 mr-2" />
+                                <span className="text-sm font-medium">{safeFormat(viewingAppointment.fecha_hora_inicio, "EEEE, d 'de' MMMM 'de' yyyy")}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center text-blue-700 mt-5">
+                            <Clock className="h-4 w-4 mr-2" />
+                            <span className="text-sm font-medium">{safeFormat(viewingAppointment.fecha_hora_inicio, "HH:mm")}</span>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-3">Información del Paciente</h4>
+                        <div className="flex items-center">
+                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                                <User className="h-5 w-5 text-gray-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Nombre</p>
+                                <p className="text-sm font-medium text-gray-900">{getPatientNameForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-3">Información del Médico</h4>
+                        <div className="flex items-center mb-3">
+                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                                <User className="h-5 w-5 text-gray-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Nombre</p>
+                                <p className="text-sm font-medium text-gray-900">{getDoctorNameForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                             <div className="h-10 w-10 flex items-center justify-center mr-3">
+                                <FileText className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Especialidad</p>
+                                <p className="text-sm font-medium text-gray-900">{getDoctorSpecialtyForDisplay(viewingAppointment)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="text-sm text-gray-500 mb-2">Motivo de la Consulta</h4>
+                        <p className="text-sm text-gray-700">
+                            {viewingAppointment.motivo || viewingAppointment.motivo_consulta || "Sin motivo especificado"}
+                        </p>
+                    </div>
+                </div>
+            )}
         </DialogContent>
       </Dialog>
     </div>
