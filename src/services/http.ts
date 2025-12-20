@@ -18,7 +18,7 @@ const httpClient: AxiosInstance = axios.create({
   baseURL: API_CONFIG.BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
   headers: API_CONFIG.HEADERS,
-  withCredentials: true, // Para Laravel Sanctum
+  withCredentials: false, // Cambiar a false si tienes problemas de CORS
 });
 
 /**
@@ -41,6 +41,15 @@ httpClient.interceptors.request.use(
 httpClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    
+    // Error de red (backend no disponible)
+    if (!error.response) {
+      console.error('❌ Error de red - Backend no disponible:', error.message);
+      toast.error('Error de conexión', {
+        description: 'No se puede conectar con el servidor. Verifica que el backend esté corriendo en http://localhost:8000',
+      });
+      return Promise.reject(error);
+    }
     
     // Si el error es 401 (No autorizado)
     if (error.response?.status === 401) {
