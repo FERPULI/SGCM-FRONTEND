@@ -3,7 +3,7 @@
  */
 
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://anakondita.com/api',
   TIMEOUT: 30000,
   API_VERSION: 'v1',
   HEADERS: {

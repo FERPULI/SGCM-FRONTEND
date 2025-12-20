@@ -62,7 +62,7 @@ Edita el archivo \`.env\` y configura las variables necesarias:
 
 \`\`\`env
 # URL de tu API Laravel (importante: sin /api al final)
-VITE_API_BASE_URL=http://localhost:8000/api
+VITE_API_BASE_URL=https://anakondita.com/deploy_backend/api
 
 # Otras configuraciones...
 \`\`\`
@@ -322,7 +322,7 @@ npm run lint         # Ejecuta linter
 
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
-| \`VITE_API_BASE_URL\` | URL base de la API Laravel | \`http://localhost:8000/api\` |
+| \`VITE_API_BASE_URL\` | URL base de la API Laravel | \`https://anakondita.com/deploy_backend/api\` |
 | \`VITE_APP_NAME\` | Nombre de la aplicación | \`Sistema de Citas Médicas\` |
 | \`VITE_ENV\` | Ambiente de ejecución | \`development\` / \`production\` |
 | \`VITE_API_TIMEOUT\` | Timeout para peticiones API (ms) | \`30000\` |
