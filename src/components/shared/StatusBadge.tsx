@@ -1,55 +1,52 @@
 import { Badge } from "../ui/badge";
-import { AppointmentStatus } from "../../types";
-import { CheckCircle2, Clock, XCircle, Calendar } from "lucide-react";
-
+// Usamos string en lugar de AppointmentStatus estricto para evitar crasheos si la API cambia
 interface StatusBadgeProps {
-  status: AppointmentStatus;
+  status: string;
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const variants: Record<AppointmentStatus, { 
-    label: string; 
-    variant: "default" | "secondary" | "destructive" | "outline";
-    className: string;
-    icon: React.ReactNode;
-  }> = {
+  // Mapeo seguro: Incluye los estados viejos (activa/pendiente) y los NUEVOS del backend (programada/confirmada)
+  const variants: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }> = {
+    // --- ESTADOS BACKEND (Lo que llega realmente) ---
     programada: { 
       label: 'Programada', 
-      variant: 'default',
-      className: 'bg-blue-100 text-blue-700 hover:bg-blue-200',
-      icon: <Calendar className="w-3 h-3 mr-1" />
+      variant: 'outline',
+      className: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200"
     },
     confirmada: { 
       label: 'Confirmada', 
       variant: 'default',
-      className: 'bg-green-100 text-green-700 hover:bg-green-200',
-      icon: <CheckCircle2 className="w-3 h-3 mr-1" />
+      className: "bg-green-600 hover:bg-green-700" 
     },
-    pendiente: { 
-      label: 'Pendiente', 
-      variant: 'secondary',
-      className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
-      icon: <Clock className="w-3 h-3 mr-1" />
-    },
-    cancelada: { 
-      label: 'Cancelada', 
-      variant: 'destructive',
-      className: 'bg-red-100 text-red-700 hover:bg-red-200',
-      icon: <XCircle className="w-3 h-3 mr-1" />
-    },
-    completada: { 
-      label: 'Completada', 
-      variant: 'outline',
-      className: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-      icon: <CheckCircle2 className="w-3 h-3 mr-1" />
-    },
+    
+    // --- ESTADOS LEGACY (Por si acaso quedan en la BD) ---
+    activa: { label: 'Activa', variant: 'default' },
+    pendiente: { label: 'Pendiente', variant: 'secondary' },
+    
+    // --- ESTADOS COMUNES ---
+    cancelada: { label: 'Cancelada', variant: 'destructive' },
+    completada: { label: 'Completada', variant: 'secondary', className: "bg-gray-200 text-gray-800" },
   };
 
-  const config = variants[status] || variants.pendiente;
+  // Normalizamos a minúsculas para evitar errores de tipeo (Ej: "Programada" vs "programada")
+  const normalizedStatus = status?.toLowerCase() || "";
+  const config = variants[normalizedStatus];
+
+  // PROTECCIÓN CONTRA PANTALLA BLANCA 🛡️
+  // Si llega un estado que no conocemos, mostramos uno genérico en lugar de romper la app
+  if (!config) {
+    return (
+      <Badge variant="outline" className="rounded-full bg-gray-100 text-gray-500">
+        {status || "Desconocido"}
+      </Badge>
+    );
+  }
 
   return (
-    <Badge variant={config.variant} className={`rounded-full flex items-center ${config.className}`}>
-      {config.icon}
+    <Badge 
+      variant={config.variant} 
+      className={`rounded-full ${config.className || ''}`}
+    >
       {config.label}
     </Badge>
   );

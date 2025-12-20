@@ -22,7 +22,9 @@ import { AppointmentManagement } from "./components/admin/AppointmentManagement"
 import { Reports } from "./components/admin/Reports"; 
 import { Settings } from "./components/admin/Settings"; 
 import { DoctorManagement } from "./components/admin/DoctorManagement";
-import { AdminProfile } from "./components/admin/AdminProfile";
+// [NUEVO] Importamos el perfil de administrador
+import { UserProfile } from "./components/admin/UserProfile";
+
 import { User } from "./types";
 import { Toaster } from "./components/ui/sonner";
 import { authService } from "./services/auth.service";
@@ -86,6 +88,7 @@ export default function App() {
   const renderContent = () => {
     if (!currentUser.rol) return <div className="p-6">Cargando perfil...</div>;
 
+    // --- VISTA PACIENTE ---
     if (currentUser.rol === 'patient' || currentUser.rol === 'paciente') {
       switch (currentPage) {
         case 'inicio': return <PatientDashboard onNavigate={handleNavigate} />;
@@ -98,11 +101,10 @@ export default function App() {
       }
     }
 
+    // --- VISTA MÉDICO ---
     if (currentUser.rol === 'doctor' || currentUser.rol === 'medico') {
       switch (currentPage) {
-        case 'inicio': 
-          // Pasamos user={currentUser}
-          return <DoctorDashboard onNavigate={handleNavigate} user={currentUser} />;
+        case 'inicio': return <DoctorDashboard onNavigate={handleNavigate} user={currentUser} />;
         case 'citas': return <DoctorAppointments />;
         case 'calendario': return <DoctorCalendar />;
         case 'pacientes': return <PatientDetails onNavigate={handleNavigate} />;
@@ -111,6 +113,7 @@ export default function App() {
       }
     }
 
+    // --- VISTA ADMINISTRADOR ---
     if (currentUser.rol === 'admin') {
       switch (currentPage) {
         case 'inicio': return <AdminDashboard onNavigate={handleNavigate} />;
@@ -119,7 +122,10 @@ export default function App() {
         case 'citas': return <AppointmentManagement />; 
         case 'reportes': return <Reports />;
         case 'configuracion': return <Settings />;
-        case 'perfil': return <AdminProfile user={currentUser} />;
+        
+        // [NUEVO] Aquí conectamos el perfil nuevo
+        case 'perfil': return <UserProfile />; 
+        
         default: return <AdminDashboard onNavigate={handleNavigate} />;
       }
     }

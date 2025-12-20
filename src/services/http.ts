@@ -1,16 +1,15 @@
 /**
- * Cliente HTTP con Axios (Simplificado)
+ * src/services/http.ts
+ * (CORREGIDO: Incluye 'handleApiError' para que no falle useAuth)
  */
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { API_CONFIG } from '../config/api';
 import { storage } from '../utils/storage';
-import { toast } from 'sonner';
 
+// Interfaz básica de respuesta
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
-  errors?: Record<string, string[]>;
 }
 
 // Crear instancia de Axios
@@ -35,7 +34,7 @@ httpClient.interceptors.request.use(
     }
     return config;
   },
-  (error: AxiosError) => Promise.reject(error)
+  (error) => Promise.reject(error)
 );
 
 /**
@@ -89,18 +88,11 @@ httpClient.interceptors.response.use(
  */
 export const handleApiError = (error: any): string => {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<ApiResponse>;
-    if (axiosError.response?.data?.message) {
-      return axiosError.response.data.message;
-    }
-    if (axiosError.response?.data?.errors) {
-      const errors = axiosError.response.data.errors;
-      const firstError = Object.values(errors)[0];
-      return Array.isArray(firstError) ? firstError[0] : 'Error de validación';
-    }
-    if (axiosError.message) {
-      return axiosError.message;
-    }
+    // Intentamos sacar el mensaje de error del backend
+    const data = error.response?.data as any;
+    if (data?.message) return data.message;
+    if (data?.error) return data.error;
+    return error.message;
   }
   return 'Ocurrió un error inesperado.';
 };

@@ -1,17 +1,18 @@
 /**
+ * src/services/reports.service.ts
  * Servicio de Reportes "Inteligente"
  * Calcula estadísticas reales usando los datos existentes del sistema.
  */
 
 import { http } from './http';
-import {
+import { 
   AdminDashboardStats, 
-  AppointmentsByDate,
-  AppointmentsByStatus,
-  DoctorPerformance,
-  PatientStatistics,
-  RevenueReport,
-  ReportFilters
+  AppointmentsByDate, 
+  AppointmentsByStatus, 
+  DoctorPerformance, 
+  PatientStatistics, 
+  RevenueReport, 
+  ReportFilters 
 } from '../types';
 
 export const reportsService = {
@@ -21,14 +22,14 @@ export const reportsService = {
     try {
       // Pedimos todo al mismo tiempo para que cargue rápido
       const [pacientesRes, medicosRes, citasRes] = await Promise.all([
-        http.get('users', { params: { per_page: 1000 } }),
+        http.get('users', { params: { per_page: 1000 } }), // Traemos bastantes usuarios
         http.get('medicos-directorio', { params: { per_page: 1000 } }),
         http.get('citas', { params: { per_page: 1000 } })
       ]);
 
       // Extraemos arrays (soportando paginación o array directo)
       const getArray = (res: any) => (res.data?.data && Array.isArray(res.data.data)) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
-      
+
       const usuarios = getArray(pacientesRes);
       const medicos = getArray(medicosRes);
       const citas = getArray(citasRes);
@@ -66,19 +67,7 @@ export const reportsService = {
     } catch (error) {
       console.error("Error calculando dashboard:", error);
       // Retornamos ceros si falla
-      return { 
-        totalPacientes: 0, 
-        totalMedicos: 0, 
-        citasHoy: 0, 
-        citasPendientes: 0, 
-        citasCompletadas: 0, 
-        tasaCompletacion: 0, 
-        tasaCancelacion: 0, 
-        totalCitas: 0, 
-        citasEsteMes: 0, 
-        nuevosUsuarios: 0, 
-        citasRecientes: [] 
-      };
+      return { totalPacientes: 0, totalMedicos: 0, citasHoy: 0, citasPendientes: 0, citasCompletadas: 0, tasaCompletacion: 0, tasaCancelacion: 0, totalCitas: 0, citasEsteMes: 0, nuevosUsuarios: 0, citasRecientes: [] };
     }
   },
 
@@ -96,7 +85,7 @@ export const reportsService = {
       });
 
       // Convertir a formato de gráfica
-      return Array.from(mapa.entries()).map(([fecha, total]) => ({ fecha, total }));
+      return Array.from(mapa.entries()).map(([date, total]) => ({ date, total }));
     } catch { return []; }
   },
 
@@ -115,9 +104,9 @@ export const reportsService = {
       });
 
       return [
-        { estado: 'completada', total: conteo.completada },
-        { estado: 'pendiente', total: conteo.pendiente + conteo.programada },
-        { estado: 'cancelada', total: conteo.cancelada }
+        { name: 'Completadas', value: conteo.completada, color: '#10B981' },
+        { name: 'Pendientes', value: conteo.pendiente + conteo.programada, color: '#3B82F6' },
+        { name: 'Canceladas', value: conteo.cancelada, color: '#EF4444' }
       ];
     } catch { return []; }
   },
@@ -136,16 +125,18 @@ export const reportsService = {
       return medicos.map((m: any) => {
         const misCitas = citas.filter((c: any) => c.medico_id === m.id || c.doctor_id === m.id);
         return {
-          medico_id: m.id,
-          nombre_medico: m.nombre_completo || m.name || 'Dr. Desconocido',
-          total_citas: misCitas.length,
-          citas_completadas: misCitas.filter((c: any) => c.estado === 'completada').length
+          id: m.id,
+          name: m.nombre_completo || m.name || 'Dr. Desconocido',
+          appointments: misCitas.length,
+          completed: misCitas.filter((c: any) => c.estado === 'completada').length,
+          revenue: misCitas.length * 50, // Simulación de ingresos ($50 por cita)
+          rating: 4.5 // Simulación
         };
       });
     } catch { return []; }
   },
-
+  
   // --- Mocks para lo demás (para que no falle) ---
-  getPatientsStatistics: async (): Promise<PatientStatistics | null> => null,
-  getRevenueReport: async (): Promise<RevenueReport[]> => []
+  getPatientsStatistics: async () => null,
+  getRevenueReport: async () => []
 };
