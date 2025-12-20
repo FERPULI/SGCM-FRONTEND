@@ -9,35 +9,26 @@ export const especialidadService = {
   
   /**
    * Obtener todas las especialidades
-   * (RENOMBRADO a 'getAll' para que coincida con AppointmentManagement)
    */
-  getAll: async (): Promise<Especialidad[]> => {
+  getAllEspecialidades: async (): Promise<Especialidad[]> => {
     try {
-      // Intentamos usar la ruta de configuración, con fallback a '/especialidades'
-      // Verificamos ambas rutas posibles según tu configuración anterior
-      const url = API_ENDPOINTS?.MEDICOS?.ESPECIALIDADES || 
-                  API_ENDPOINTS?.ESPECIALIDADES?.LIST || 
-                  '/especialidades';
-
-      // Pedimos 100 para traer todas si hay paginación
-      const response = await http.get<any>(url, { params: { per_page: 100 } });
+      // (MODIFICADO) Llama a la API y espera una respuesta paginada
+      const response = await http.get<PaginatedResponse<Especialidad>>(
+        API_ENDPOINTS.ESPECIALIDADES.LIST,
+        { params: { per_page: 100 } } // (Pide 100 para traer todas)
+      );
       
-      // LOGICA ROBUSTA:
-      // 1. Si Laravel devuelve paginación: { data: [...] }
-      if (response.data && Array.isArray(response.data.data)) {
-        return response.data.data;
+      // (MODIFICADO) Devuelve solo el array 'data'
+      if (!response || !response.data || !response.data.data) {
+        return [];
       }
-
-      // 2. Si devuelve array directo: [...]
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      }
-
-      return [];
+      return response.data.data; // Devuelve el array [ { id: 1, nombre: '...' }, ... ]
 
     } catch (error) {
       console.error("Error al cargar especialidades:", error);
       return [];
     }
   },
+  
+  // (Aquí puedes añadir 'create', 'update', 'delete' para especialidades si lo necesitas)
 };
