@@ -3,34 +3,38 @@ name: Deploy Frontend to cPanel
 on:
   push:
     branches:
-      - main  # O 'master', revisa cómo se llama tu rama principal
+      - main
 
 jobs:
   web-deploy:
-    name: 🎉 Deploy
+    name: 🎉 Deploy Frontend
     runs-on: ubuntu-latest
     steps:
     - name: 🚚 Get latest code
       uses: actions/checkout@v4
 
-    - name: 🟢 Use Node.js
+    - name: 🟢 Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18' # Ajusta a la versión que uses
+        node-version: '18' # O la versión que uses (20, etc.)
 
-    - name: 🔨 Install Dependencies
+    - name: 📦 Install Dependencies
       run: npm install
 
     - name: 🏗️ Build Project
-      # IMPORTANTE: Aquí inyectamos la URL de producción
+      # AQUÍ OCURRE LA MAGIA: Conectamos React con tu Backend real
       run: VITE_API_BASE_URL=https://anakondita.com/api npm run build
 
     - name: 📂 Sync files to Hosting
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        # Subir SOLO el contenido de dist a public_html
+        # OJO: Usamos los secretos NUEVOS del frontend
+        username: ${{ secrets.FTP_FRONTEND_USERNAME }}
+        password: ${{ secrets.FTP_FRONTEND_PASSWORD }}
+        
+        # Subimos el contenido de la carpeta 'dist' (lo que generó el build)
         local-dir: ./dist/
-        server-dir: ./public_html/
+        
+        # Lo subimos a la raíz del usuario FTP (que ya configuramos como public_html)
+        server-dir: ./
