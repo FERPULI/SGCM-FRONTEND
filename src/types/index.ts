@@ -1,10 +1,13 @@
 // src/types/index.ts
 
 // --- ENUMS & CONSTANTS ---
-export type UserRole = 'admin' | 'medico' | 'paciente';
+export type UserRole = 'admin' | 'medico' | 'paciente' | 'doctor' | 'patient';
+export type Gender = 'male' | 'female' | 'other';
 
-// Valores exactos de tu constante ESTADOS en Cita.php
-export type AppointmentStatus = 'programada' | 'confirmada' | 'cancelada' | 'completada' | 'pendiente';
+// Estados de citas (soporte para ambos formatos)
+export type AppointmentStatus = 
+  | 'programada' | 'confirmada' | 'cancelada' | 'completada' | 'pendiente'
+  | 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'activa';
 
 // --- INTERFACES PRINCIPALES (Modelos Eloquent) ---
 
@@ -18,15 +21,20 @@ export interface User {
   activo: boolean;
   email_verified_at?: string;
   created_at?: string;
+  updated_at?: string;
   
   // Relaciones (Opcionales porque dependen del eager loading)
   paciente?: Paciente;
   medico?: Medico;
+  patient?: Patient;
+  doctor?: Doctor;
   
-  // Legacy compatibility
+  // Aliases para compatibilidad
   name?: string;
   role?: UserRole;
   telefono?: string;
+  phone?: string;
+  is_active?: boolean;
 }
 
 // 2. PACIENTE (Perfil)
@@ -76,14 +84,14 @@ export interface HistorialMedico {
   created_at: string;
 }
 
-// Legacy Patient interface (compatibilidad)
+// Patient interface (Versión en inglés para compatibilidad)
 export interface Patient {
   id: number;
   user_id: number;
   first_name: string;
   last_name: string;
   date_of_birth: string;
-  gender?: string;
+  gender?: Gender;
   address?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -95,7 +103,7 @@ export interface Patient {
   user?: User;
 }
 
-// Legacy Doctor interface (compatibilidad)
+// Doctor interface (Versión en inglés para compatibilidad)
 export interface Doctor {
   id: number;
   user_id: number;
@@ -113,7 +121,7 @@ export interface Doctor {
   user?: User;
 }
 
-// Cita / Appointment
+// 6. Cita / Appointment (Versión principal en español)
 export interface Cita {
   id: number;
   paciente_id: number;
@@ -129,8 +137,19 @@ export interface Cita {
   medico?: Medico;
 }
 
-// Appointment interface (alias compatible con Cita)
-export interface Appointment extends Cita {
+// Appointment interface (Combina ambas versiones)
+export interface Appointment {
+  id: number;
+  // Campos en español (principales)
+  paciente_id?: number;
+  medico_id?: number;
+  fecha_hora_inicio?: string;
+  fecha_hora_fin?: string;
+  estado?: AppointmentStatus;
+  motivo_consulta?: string;
+  notas_paciente?: string;
+  
+  // Campos en inglés (aliases)
   patient_id?: number;
   doctor_id?: number;
   appointment_date?: string;
@@ -139,10 +158,13 @@ export interface Appointment extends Cita {
   notes?: string;
   cancellation_reason?: string;
   completion_notes?: string;
-  created_at?: string;
-  updated_at: string;
   
-  // Relaciones cargadas (Eager Loading)
+  created_at?: string;
+  updated_at?: string;
+  
+  // Relaciones cargadas (soporte para ambos)
+  paciente?: Paciente;
+  medico?: Medico;
   patient?: Patient;
   doctor?: Doctor;
   medical_record?: MedicalRecord;
@@ -166,7 +188,7 @@ export interface MedicalRecord {
     weight?: number;
     height?: number;
   };
-  attachments?: string[]; // Array de URLs o paths
+  attachments?: string[];
   created_at: string;
   updated_at: string;
   patient?: Patient;
@@ -178,9 +200,9 @@ export interface MedicalRecord {
 export interface DoctorSchedule {
   id: number;
   doctor_id: number;
-  day_of_week: number; // 0-6 (Domingo a Sábado)
-  start_time: string; // Formato HH:mm
-  end_time: string;   // Formato HH:mm
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
   is_available: boolean;
   created_at: string;
   updated_at: string;
@@ -202,16 +224,45 @@ export interface RegisterData {
   phone?: string;
 }
 
-// --- TIPOS PARA EL DASHBOARD (Estadísticas y Vistas) ---
-
-export interface DashboardStats {
-  appointments_today: number;
-  pending_appointments: number;
-  upcoming_appointments: number;
-  unique_patients_month: number;
+export interface CreateAppointmentPayload {
+  medico_id: number;
+  paciente_id: number;
+  fecha: string;
+  hora: string;
+  motivo: string;
 }
 
-// Estructura completa de la respuesta del Dashboard del Doctor
+export interface AvailableSlotsResponse {
+  success: boolean;
+  slots: string[];
+}
+
+// --- DASHBOARD STATS ---
+
+export interface DashboardStats {
+  appointments_today?: number;
+  pending_appointments?: number;
+  upcoming_appointments?: number;
+  unique_patients_month?: number;
+  citasHoy?: number;
+  citasPendientes?: number;
+}
+
+export interface AdminDashboardStats {
+  totalPacientes: number;
+  totalMedicos: number;
+  citasHoy: number;
+  citasPendientes: number;
+  citasCompletadas: number;
+  citasCanceladas: number;
+  tasaCompletacion: number;
+  tasaCancelacion: number;
+  totalCitas: number;
+  citasEsteMes: number;
+  nuevosUsuarios: number;
+  citasRecientes: Appointment[];
+}
+
 export interface DoctorDashboardData {
   stats: DashboardStats;
   today_appointments: Appointment[];
@@ -222,16 +273,15 @@ export interface DoctorDashboardData {
 // --- UTILIDADES DE FILTRADO Y PAGINACIÓN ---
 
 export interface UserFilters {
-  q?: string;          // Búsqueda general
-  role?: string;       // Filtro por rol
-  status?: string;     // Filtro por estado de cita
-  date?: string;       // Filtro por fecha
+  q?: string;
+  role?: string;
+  status?: string;
+  date?: string;
   page?: number;
   per_page?: number;
   specialty?: string;
 }
 
-// Estructura de paginación estándar de Laravel (LengthAwarePaginator)
 export interface PaginatedResponse<T> {
   data: T[];
   links: {
@@ -248,7 +298,6 @@ export interface PaginatedResponse<T> {
     per_page: number;
     to: number;
     total: number;
-    // Stats opcionales para respuestas complejas
     stats_generales?: {
       totalMedicos: number;
       totalEspecialidades: number;
@@ -258,7 +307,7 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Tipos Legacy (Mantener solo si es estrictamente necesario para compatibilidad hacia atrás)
+// Tipos Legacy (Compatibilidad)
 export interface DoctorAvailability {
   id: string;
   medicoId: string;
