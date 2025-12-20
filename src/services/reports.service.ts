@@ -149,35 +149,3 @@ export const reportsService = {
   getPatientsStatistics: async (): Promise<PatientStatistics | null> => null,
   getRevenueReport: async (): Promise<RevenueReport[]> => []
 };
-    } catch (error) {
-      console.error("Error al obtener rendimiento de doctores:", error);
-      return [];
-    }
-  },
-  
-  getPatientsStatistics: async (filters?: ReportFilters): Promise<PatientStatistics | null> => {
-    try {
-      const response = await http.get<ApiResponse<PatientStatistics>>(
-        API_ENDPOINTS.REPORTS.PATIENTS_STATISTICS,
-        { params: filters }
-      );
-      return response.data?.data || null;
-    } catch (error) {
-      console.error("Error al obtener estadísticas de pacientes:", error);
-      return null;
-    }
-  },
-  
-  getRevenueReport: async (filters?: ReportFilters): Promise<RevenueReport[]> => {
-    try {
-      const response = await http.get<ApiResponse<RevenueReport[]>>(
-        API_ENDPOINTS.REPORTS.REVENUE,
-        { params: filters }
-      );
-      return response.data?.data || [];
-    } catch (error) {
-      console.error("Error al obtener reporte de ingresos:", error);
-      return [];
-    }
-  },
-};
